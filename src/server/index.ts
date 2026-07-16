@@ -32,7 +32,8 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', version: '1.0.0' });
 });
 
-// TODO: depends on agent-02 implementing route handlers in ./routes/
+import { mountRoutes } from './routes';
+mountRoutes(app);
 
 const server = http.createServer(app);
 
