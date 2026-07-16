@@ -1,8 +1,11 @@
-// TODO: depends on agent-04 implementing API client for real data
+import { useEffect, useState } from 'react'
+import { papersApi } from '@/client/api/client'
+import { notesApi } from '@/client/api/client'
+import { projectsApi } from '@/client/api/client'
 
 interface StatCardProps {
   label: string
-  value: number
+  value: number | string
 }
 
 const headingStyle: React.CSSProperties = {
@@ -42,6 +45,15 @@ const cardValueStyle: React.CSSProperties = {
   color: '#ffffff',
 }
 
+const errorStyle: React.CSSProperties = {
+  color: '#e94560',
+  background: '#2a1a2a',
+  padding: '10px 14px',
+  borderRadius: '6px',
+  marginBottom: '16px',
+  fontSize: '14px',
+}
+
 function StatCard({ label, value }: StatCardProps) {
   return (
     <div style={cardStyle}>
@@ -51,17 +63,60 @@ function StatCard({ label, value }: StatCardProps) {
   )
 }
 
+interface Counts {
+  papers: number
+  notes: number
+  projects: number
+}
+
 function Dashboard() {
+  const [counts, setCounts] = useState<Counts>({ papers: 0, notes: 0, projects: 0 })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      setError(null)
+      try {
+        // Fire the three independent count requests in parallel. Each request
+        // surfaces a total / list length we can use for the stat card.
+        const [papersRes, notesRes, projectsRes] = await Promise.all([
+          papersApi.list({ page: 1, limit: 1 }),
+          notesApi.list(),
+          projectsApi.list(),
+        ])
+        if (cancelled) return
+        setCounts({
+          papers: papersRes.total,
+          notes: notesRes.notes.length,
+          projects: projectsRes.projects.length,
+        })
+      } catch (err) {
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   return (
     <div>
       <h1 style={headingStyle}>Welcome to Open Research</h1>
       <p style={subtitleStyle}>
         An open-source research tool that redefines the research workflow.
       </p>
+      {error && <div style={errorStyle}>{error}</div>}
       <div style={cardsRowStyle}>
-        <StatCard label="Total Papers" value={0} />
-        <StatCard label="Recent Notes" value={0} />
-        <StatCard label="Active Projects" value={0} />
+        <StatCard label="Total Papers" value={loading ? '…' : counts.papers} />
+        <StatCard label="Recent Notes" value={loading ? '…' : counts.notes} />
+        <StatCard label="Active Projects" value={loading ? '…' : counts.projects} />
       </div>
     </div>
   )
