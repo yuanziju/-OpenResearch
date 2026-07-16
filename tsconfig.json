@@ -16,6 +16,5 @@
     },
     "baseUrl": "."
   },
-  "include": ["src/client/**/*", "src/shared/**/*"],
-  "references": [{ "path": "./tsconfig.server.json" }]
+  "include": ["src/client/**/*", "src/shared/**/*"]
 }

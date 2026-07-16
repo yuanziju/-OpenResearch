@@ -9,7 +9,7 @@
     "lib": ["ES2020"],
     "skipLibCheck": true,
     "outDir": "./dist/server",
-    "rootDir": "./src/server",
+    "rootDir": "./src",
     "paths": {
       "@/*": ["./src/*"]
     },
