@@ -171,26 +171,170 @@ npm run start
 ## 6. Key Decisions
 
 ### 6.1 Architecture Pattern
-- **Decision**: Monorepo with client-server separation
-- **Rationale**: Simplifies shared types, improves maintainability
-- **Status**: Proposed
+- **Decision**: Monorepo with client-server separation, Electron desktop app
+- **Rationale**: Simplifies shared types, improves maintainability, Electron enables local desktop deployment
+- **Status**: Approved
 
 ### 6.2 State Management
 - **Decision**: Zustand for client state
 - **Rationale**: Lightweight, TypeScript-friendly, minimal boilerplate
-- **Status**: Proposed
+- **Status**: Approved
 
 ### 6.3 Database
-- **Decision**: SQLite for local storage
-- **Rationale**: Zero-config, file-based, suitable for local app
-- **Status**: Proposed
+- **Decision**: SQLite (better-sqlite3) for local storage
+- **Rationale**: Zero-config, file-based, suitable for local desktop app
+- **Status**: Approved
 
 ### 6.4 Real-time Communication
 - **Decision**: WebSockets for collaboration
 - **Rationale**: Full-duplex communication, real-time updates
-- **Status**: Proposed
+- **Status**: Approved
 
-## 7. Future Enhancements
+### 6.5 Frontend Framework
+- **Decision**: React with Open Designer, Vite as build tool
+- **Rationale**: User-specified, modern React ecosystem
+- **Status**: Approved
+
+## 7. API Contract
+
+### 7.1 REST API Endpoints
+
+All endpoints are prefixed with `/api`. Responses use JSON format. All timestamps are ISO 8601 strings.
+
+#### Papers
+
+| Method | Path | Request Body | Response |
+|--------|------|-------------|----------|
+| GET | `/papers` | - (query: page, limit, sort, order) | `{ papers: Paper[], total: number, page: number, limit: number }` |
+| GET | `/papers/:id` | - | `{ paper: Paper }` |
+| POST | `/papers` | `{ source: 'url' \| 'file' \| 'manual', url?: string, file?: FormData, data?: Partial<Paper> }` | `{ paper: Paper }` |
+| PUT | `/papers/:id` | `Partial<Paper>` | `{ paper: Paper }` |
+| DELETE | `/papers/:id` | - | `{ success: boolean }` |
+
+#### Search
+
+| Method | Path | Request Body | Response |
+|--------|------|-------------|----------|
+| POST | `/search` | `{ query: string, filters: SearchFilters, page?: number, limit?: number }` | `{ results: Paper[], total: number, sources: string[] }` |
+| GET | `/search/saved` | - | `{ queries: SearchQuery[] }` |
+| POST | `/search/saved` | `{ query: string, filters: SearchFilters }` | `{ query: SearchQuery }` |
+| DELETE | `/search/saved/:id` | - | `{ success: boolean }` |
+
+#### Notes
+
+| Method | Path | Request Body | Response |
+|--------|------|-------------|----------|
+| GET | `/notes` | - (query: paperId) | `{ notes: Note[] }` |
+| GET | `/notes/:id` | - | `{ note: Note }` |
+| POST | `/notes` | `{ title: string, content: string, tags?: string[], paperId?: string }` | `{ note: Note }` |
+| PUT | `/notes/:id` | `Partial<Note>` | `{ note: Note }` |
+| DELETE | `/notes/:id` | - | `{ success: boolean }` |
+
+#### Projects
+
+| Method | Path | Request Body | Response |
+|--------|------|-------------|----------|
+| GET | `/projects` | - | `{ projects: Project[] }` |
+| GET | `/projects/:id` | - | `{ project: Project, members: User[], papers: Paper[], notes: Note[] }` |
+| POST | `/projects` | `{ name: string, description: string }` | `{ project: Project }` |
+| PUT | `/projects/:id` | `Partial<Project>` | `{ project: Project }` |
+| DELETE | `/projects/:id` | - | `{ success: boolean }` |
+| POST | `/projects/:id/members` | `{ userId: string }` | `{ success: boolean }` |
+| DELETE | `/projects/:id/members/:userId` | - | `{ success: boolean }` |
+
+#### AI Analysis
+
+| Method | Path | Request Body | Response |
+|--------|------|-------------|----------|
+| POST | `/ai/summarize` | `{ paperId: string }` | `{ summary: string }` |
+| POST | `/ai/insights` | `{ paperId: string }` | `{ insights: string[] }` |
+| POST | `/ai/related` | `{ paperId: string, limit?: number }` | `{ papers: Paper[] }` |
+| POST | `/ai/review` | `{ paperIds: string[], topic?: string }` | `{ review: string, citations: string[] }` |
+| POST | `/ai/trends` | `{ topic: string, timeframe?: string }` | `{ trends: { topic: string, direction: string, papers: string[] }[] }` |
+
+#### Citations
+
+| Method | Path | Request Body | Response |
+|--------|------|-------------|----------|
+| GET | `/citations/:paperId` | - | `{ citations: Citation[] }` |
+| POST | `/citations` | `{ paperId: string, format: Citation['format'] }` | `{ citation: Citation }` |
+| GET | `/citations/export` | - (query: format, paperIds) | Binary (file download) |
+
+#### Knowledge Graph
+
+| Method | Path | Request Body | Response |
+|--------|------|-------------|----------|
+| GET | `/graph/:projectId` | - | `{ nodes: GraphNode[], edges: GraphEdge[] }` |
+| POST | `/graph/build` | `{ projectId: string }` | `{ nodes: GraphNode[], edges: GraphEdge[] }` |
+
+#### Health
+
+| Method | Path | Request Body | Response |
+|--------|------|-------------|----------|
+| GET | `/health` | - | `{ status: 'ok', version: string }` |
+
+### 7.2 WebSocket Protocol
+
+Connection URL: `ws://localhost:3000/ws`
+
+#### Client to Server Messages
+
+```typescript
+// Join a project collaboration room
+{ type: 'join', projectId: string }
+
+// Leave a project room
+{ type: 'leave', projectId: string }
+
+// Update cursor position for real-time collaboration
+{ type: 'cursor', projectId: string, position: { x: number, y: number, selection?: string } }
+
+// Edit a note (operational transform)
+{ type: 'note_edit', noteId: string, operation: 'insert' | 'delete', position: number, content: string }
+
+// Add a comment to a note
+{ type: 'comment', noteId: string, content: string, position?: number }
+```
+
+#### Server to Client Messages
+
+```typescript
+// Another user joined the project
+{ type: 'user_joined', userId: string, projectId: string }
+
+// Another user left the project
+{ type: 'user_left', userId: string, projectId: string }
+
+// Another user's cursor moved
+{ type: 'cursor_update', userId: string, position: { x: number, y: number, selection?: string } }
+
+// A note was edited by another user
+{ type: 'note_updated', noteId: string, userId: string, operation: 'insert' | 'delete', position: number, content: string }
+
+// A comment was added to a note
+{ type: 'comment_added', noteId: string, userId: string, content: string, position?: number }
+
+// Error message
+{ type: 'error', message: string }
+```
+
+### 7.3 Error Response Format
+
+All error responses follow this format:
+
+```typescript
+{
+  error: {
+    code: string,        // e.g. 'NOT_FOUND', 'VALIDATION_ERROR', 'INTERNAL_ERROR'
+    message: string,     // Human-readable error message
+    details?: any        // Optional additional details
+  }
+}
+```
+
+HTTP status codes: 200 (success), 201 (created), 400 (bad request), 404 (not found), 500 (internal error)
+
+## 8. Future Enhancements
 
 - Mobile app support
 - Plugin system for custom integrations
