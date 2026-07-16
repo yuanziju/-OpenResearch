@@ -1,9 +1,9 @@
 import * as http from 'http';
 import express from 'express';
-// Default import is used (instead of `import { WebSocketServer }`) because `ws`
-// attaches `WebSocketServer` to its CJS export indirectly, which Node's ESM
-// named-export detection cannot see under `"type": "module"` builds.
-import WebSocket from 'ws';
+// `ws` v8+ exposes a proper ESM named export for WebSocketServer, which is the
+// canonical usage under Node ESM (`"type": "module"`). The previous default-
+// import + `WebSocket.WebSocketServer` form is not a constructor at runtime.
+import { WebSocketServer } from 'ws';
 // Importing the database module initializes the singleton (opens the SQLite
 // file and creates tables) so it is ready before serving any requests.
 import './database';
@@ -39,7 +39,7 @@ const server = http.createServer(app);
 
 // WebSocket server for real-time collaboration, mounted on the same HTTP
 // server at /ws.
-const wss = new WebSocket.WebSocketServer({ server, path: '/ws' });
+const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', () => {
   // Realtime collaboration handlers will be implemented in src/server/realtime/.
