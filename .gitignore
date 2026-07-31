@@ -64,3 +64,6 @@ htmlcov/
 
 # ===== Internal =====
 /.work/
+
+# ===== Vendor reference (read-only, large, not part of project) =====
+/graal/
