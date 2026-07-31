@@ -19,7 +19,7 @@
 
 | 任务 | 范围 | 状态 |
 |---|---|---|
-| T1 | cargo workspace 骨架 + 4 crate 空根打通编译（rustci-collections / rustci-util-json / rustci-vm-ci / rustci-bridge；cdylib `librustci_bridge.so` 已产出） | T1 已完成 |
+| T1 | cargo workspace 骨架 + 4 crate 空根打通编译（rustci-collections / rustci-util-json / rustci-vm-ci / rustci-bridge；cdylib `librustci_bridge.so` 已产出） | 已完成 |
 
 ---
 

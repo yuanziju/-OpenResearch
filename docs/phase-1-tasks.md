@@ -394,10 +394,10 @@ T1 (workspace 骨架)
 
 worker 遇到以下未确认项时，统一策略：**基于 Java 侧声明反推 + 在对应 source-map MD "偏离记录" 标注 + 不阻断实现**；C++ 签名以 Java `native` 声明为契约基准。每项核对结果由 worker 回填对应 MD 并通知主协调者升级 spec 版本。
 
-1. **jdk.vm.ci Java 源不可直接访问**（最高优先级前置阻塞）
-   - 现状：`/opt` 下无 `src.zip`；`find /opt -name "CompilerToVM.java"` / `JVMCICompiler.java` 均无命中。`jdk.vm.ci` 全部 213 文件（含 `CompilerToVM.java` 的 132 native 声明、`HotSpotJVMCIRuntime.compile0`、`JVMCICompiler.compileMethod`）不在 `/opt/graal` 也不在 `/opt/jdk-src`。
-   - 处理：T4 启动时 worker 先落 JDK25 源（下载 OpenJDK25 `src.zip` 解压，或从 `github.com/openjdk/jdk` raw 取 `src/jdk.internal.vm.ci/share/classes/jdk/vm/ci/`），解压到 `/workspace/.jdk-src/`（gitignore）或 `/tmp`。落定后将实际路径回填 `jdk-vm-ci-*.md` 的"源位置"字段。
-   - 阻断范围：T4-T9 全部依赖此项；T1-T3 不依赖（util/json 与 collections 源在 `/opt/graal` 内）。
+1. **jdk.vm.ci Java 源**（已解决 — 2026-07-31）
+   - 现状：已从 JDK25 `src.zip` 提取到 `/opt/jdk-vm-ci-src/`，共 213 文件，路径前缀 `jdk.internal.vm.ci/jdk/vm/ci/`，含 `CompilerToVM.java`（132 native 声明）、`HotSpotJVMCIRuntime.compile0`、`JVMCICompiler.compileMethod`、`meta/code/runtime/hotspot/services` 全部子包。
+   - 访问：worker 用 `RunCommand`（`rg`/`find`/`cat`/`head`）读 `/opt/jdk-vm-ci-src/jdk.internal.vm.ci/jdk/vm/ci/<sub>/`，禁止 `Grep`/`Glob`（/opt 不可见）。
+   - 阻断范围：已解除。T4-T9 直接读 `/opt/jdk-vm-ci-src`，无需自行下载。
 
 2. **C++ JVMCI 源（`compilerToVM.cpp` 等）确认缺失**
    - 现状：spec §10.3 已确认 `compilerToVM.cpp` 在 openjdk/jdk master 与 oracle/graal 均不存在（JEP410 演进移除 Java JVMCI C++ 桥）。
