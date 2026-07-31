@@ -164,3 +164,31 @@ fn tri_state_display_and_name() {
     assert_eq!(TriState::Unknown.to_string(), "UNKNOWN");
     assert_eq!(TriState::True.name(), "TRUE");
 }
+
+#[test]
+fn primitive_constant_to_value_string_no_overflow() {
+    // 回归 B1：原 PrimitiveConstant::to_value_string() 误调 java_constant::to_string(self)，
+    // 与 java_constant::to_string 反向回调 to_value_string 形成无限递归（运行时栈溢出）。
+    // 现镜像 Java JavaConstant.toValueString() 默认实现（JavaConstant.java:136-142）：
+    //   getJavaKind() == Illegal → "illegal"；否则 getJavaKind().format(asBoxedPrimitive())。
+    let c = crate::meta::java_constant::for_int(5);
+    assert_eq!(crate::meta::constant::Constant::to_value_string(&c), "5");
+
+    // Illegal kind → "illegal"（toValueString 第一分支，不调 asBoxedPrimitive）。
+    let illegal = crate::meta::java_constant::for_illegal();
+    assert_eq!(
+        crate::meta::constant::Constant::to_value_string(&illegal),
+        "illegal"
+    );
+
+    // JavaConstant.toString(c) 单向调 to_value_string，不再递归。
+    assert_eq!(crate::meta::java_constant::to_string(&c), "int[5]");
+
+    // NullConstant.toValueString() 覆写返回 "null"（NullConstant.java:89-91），未受 B1 影响。
+    let null = crate::meta::java_constant::null_pointer();
+    assert_eq!(
+        crate::meta::constant::Constant::to_value_string(&null),
+        "null"
+    );
+    assert_eq!(crate::meta::java_constant::to_string(&null), "Object[null]");
+}

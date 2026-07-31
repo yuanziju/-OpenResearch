@@ -8,9 +8,9 @@
 
 JVMCI 元数据层。定义 Java 类型/方法/字段/常量/签名/profiling 等抽象接口与 `Unresolved*` 占位实现，是 RustCI 骨架的根接口集。
 
-T4 已完成核心接口与关键 final class 子集的 1:1 镜像：Java 接口 → Rust trait，final class → struct+impl，继承 → supertrait，null 语义 → `Option<T>` 或对齐 Java nullable 引用语义（详见下方偏离记录）。Rust 代码位于 `rustci/crates/rustci-vm-ci/src/meta/`，共 48 个 `.rs` 文件（含 `mod.rs`/`mock_tests.rs`），Rust LoC 7239；对应 Java 源 LoC 7178。
+T4 已完成核心接口与关键 final class 子集的 1:1 镜像：Java 接口 → Rust trait，final class → struct+impl，继承 → supertrait，null 语义 → `Option<T>` 或对齐 Java nullable 引用语义（详见下方偏离记录）。Rust 代码位于 `rustci/crates/rustci-vm-ci/src/meta/`，共 49 个 `.rs` 文件（含 `mod.rs`/`mock_tests.rs`），Rust LoC 7239；对应 Java 源 LoC 7178。
 
-自验：`cargo test -p rustci-vm-ci`（4 测试全过，trait 可被 mock 实现并通过编译）；`cargo fmt --check -p rustci-vm-ci`（无差异）。
+自验：`cargo test -p rustci-vm-ci`（5 测试全过，trait 可被 mock 实现并通过编译）；`cargo fmt --check -p rustci-vm-ci`（无差异）。
 
 ## 映射表
 
@@ -146,6 +146,21 @@ T4 已完成核心接口与关键 final class 子集的 1:1 镜像：Java 接口
 
 ## 自验结果
 
-- `cd /workspace/rustci && cargo test -p rustci-vm-ci`：编译通过，4 测试全过（`mock_tests::unresolved_java_type_basic`、`unresolved_java_method_with_mock_signature`、`default_profiling_info_behavior`、`tri_state_display_and_name`），证明 trait 可被 mock 实现并通过编译。
+- `cd /workspace/rustci && cargo test -p rustci-vm-ci`：编译通过，5 测试全过（`mock_tests::unresolved_java_type_basic`、`unresolved_java_method_with_mock_signature`、`default_profiling_info_behavior`、`tri_state_display_and_name`、`primitive_constant_to_value_string_no_overflow`），证明 trait 可被 mock 实现并通过编译。
 - `cd /workspace/rustci && cargo fmt --check -p rustci-vm-ci`：无差异（通过）。
-- 编译告警：4 条 `unused_variables`（`annotated.rs` 默认方法参数 `type1`/`type2`/`types`/`type_`，对应 Java 默认方法抛异常不读参数），非错误，保留以对齐 Java 签名。
+- `cd /workspace/rustci && cargo clippy -p rustci-vm-ci`：exit 0；`annotated.rs` 无 `unused_variables` 告警（M2 修复后清零）。仍有 7 条既有 clippy 告警（`manual_find`/`needless_borrow` 等，分布于 `abstract_java_profile.rs`/`deoptimization.rs`/`resolved_java_method.rs`/`resolved_java_type.rs`/`signature.rs`，均为 T4 worker 既存风格，非本次 fixer 范围）。
+
+## 修复记录（fixer，2026-07-31）
+
+T4 verifier 发现 1 项阻断 + 2 项轻微问题，由 fixer 一次性修复并自验通过：
+
+- **B1（阻断）— `PrimitiveConstant::to_value_string()` 无限递归 → 栈溢出**：
+  `primitive_constant.rs:144-158`。原实现回调 `crate::meta::java_constant::to_string(self)`，而 `java_constant::to_string`（`java_constant.rs:101-111`）单向回调 `constant.to_value_string()`，形成无限递归，运行时栈溢出。
+  修复：改为直接镜像 Java `JavaConstant.toValueString()` 默认实现（`JavaConstant.java:136-142`）——
+  `getJavaKind() == Illegal` 返回 `"illegal"`，否则 `getJavaKind().format(asBoxedPrimitive())`。
+  Java `PrimitiveConstant` 未覆写 `toValueString()`，继承默认实现；`JavaConstant.toString(c)` 单向调 `toValueString()` 不反向，Rust 侧现与此对齐。
+  回归测试 `primitive_constant_to_value_string_no_overflow` 验证 `for_int(5).to_value_string() == "5"`、`for_illegal().to_value_string() == "illegal"`、`to_string(for_int(5)) == "int[5]"`、`NullConstant` 路径未受影响（`"null"` / `"Object[null]"`），均不栈溢出。
+- **M1（轻微）— 偏离记录文件数 48→49**：`meta/` 目录实有 49 个 `.rs` 文件（上方说明段已更正）。
+- **M2（轻微）— `annotated.rs` 4 条 `unused_variables` 告警**：
+  `annotated.rs:35-46`。`get_annotation_data_many`（参数 `type1`/`type2`/`types`）与 `get_annotation_data`（参数 `type_`）为 Java 默认方法（`Annotated.java`），方法体 `throw new UnsupportedOperationException()` 不读参数。
+  修复：参数名加下划线前缀（`_type1`/`_type2`/`_types`/`_type_`）消除告警，保留可读性与 Java 签名对齐。clippy 复核 `annotated.rs` 无 `unused_variables`。

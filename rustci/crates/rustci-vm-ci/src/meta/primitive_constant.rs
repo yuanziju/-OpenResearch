@@ -142,7 +142,19 @@ impl Constant for PrimitiveConstant {
     }
 
     fn to_value_string(&self) -> String {
-        crate::meta::java_constant::to_string(self)
+        // 对应 `JavaConstant.toValueString()` 默认实现（JavaConstant.java:136-142）：
+        //   default String toValueString() {
+        //       if (getJavaKind() == JavaKind.Illegal) return "illegal";
+        //       return getJavaKind().format(asBoxedPrimitive());
+        //   }
+        // PrimitiveConstant 未覆写 toValueString()，继承默认实现。
+        // 不得回调 java_constant::to_string(self)——后者单向调 to_value_string()，
+        // 反向调用形成无限递归（B1 栈溢出）。
+        if self.kind == JavaKind::Illegal {
+            "illegal".to_string()
+        } else {
+            self.kind.format(&self.as_boxed_primitive())
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

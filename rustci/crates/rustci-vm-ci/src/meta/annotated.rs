@@ -34,14 +34,14 @@ use crate::meta::resolved_java_type::ResolvedJavaType;
 pub trait Annotated {
     fn get_annotation_data_many(
         &self,
-        type1: &dyn ResolvedJavaType,
-        type2: &dyn ResolvedJavaType,
-        types: &[&dyn ResolvedJavaType],
+        _type1: &dyn ResolvedJavaType,
+        _type2: &dyn ResolvedJavaType,
+        _types: &[&dyn ResolvedJavaType],
     ) -> Vec<AnnotationData> {
         panic!("UnsupportedOperationException");
     }
 
-    fn get_annotation_data(&self, type_: &dyn ResolvedJavaType) -> Option<AnnotationData> {
+    fn get_annotation_data(&self, _type_: &dyn ResolvedJavaType) -> Option<AnnotationData> {
         panic!("UnsupportedOperationException");
     }
 }

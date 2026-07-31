@@ -55,11 +55,13 @@ Rust LoC：总计 2393 行（非测试 1486 行 + 测试 907 行）。
 - **缓解**：测试中明确标注此偏离（`cursor_iterates_in_sorted_order`、`set_iterator_sorted_order`）。
 - **修正**：完整 `EconomicMapImpl` 移植后将恢复插入顺序语义。
 
-### 2. Cursor 变更操作延迟（remove/setValue）
+### 2. Cursor 变更操作(remove/setValue)分两类处理
 
-- **Java**：`MapCursor.remove()` 和 `MapCursor.setValue()` 在 `EconomicMapImpl` 的 cursor 中直接变更底层存储。
-- **Rust**：`BTreeEconomicMapCursor` 和 `EconomicMapWrapCursor` 借用 map 的不可变引用（Java `getEntries` 本身是非变更调用），因此 `remove`/`set_value` panic（`UnsupportedOperationException`），延迟到 `EconomicMapImpl` 移植。
-- **影响**：cursor 遍历（`advance`/`get_key`/`get_value`）完全可用；仅 `remove`/`setValue` 不可用。
+- **Java**：`MapCursor.remove()` 和 `MapCursor.setValue()` 在 `EconomicMapImpl` 的 cursor 中直接变更底层存储；`EconomicMapWrap` 的 cursor 委托底层 `java.util.Map` 的 `iterator.remove()` / `Map.Entry.setValue()`（Java `EconomicMapWrap.getEntries()` 返回的匿名 `MapCursor` 重写了 `remove`/`setValue`，非 trait default）。
+- **Rust**：trait `UnmodifiableEconomicMap::get_entries` 是 `&self`（对齐 Java `getEntries` 非变更签名），返回的 cursor 借用 map 的不可变引用，无法 mutate 底层 `BTreeMap`。分两类处理：
+  - **`BTreeEconomicMapCursor`（计划延后）**：`remove`/`set_value` panic，标注 "deferred to the EconomicMapImpl port"。这是计划性延后——真正的 remove/setValue 语义随完整 `EconomicMapImpl` 移植时补（`EconomicMapImpl` 的 cursor 直接操作内部数组，无借用约束）。
+  - **`EconomicMapWrapCursor`（当前缺口）**：Java `EconomicMapWrap` 的 cursor 实际支持 `remove`/`setValue`（委托 `iterator.remove`/`entry.setValue`），因此这是真实功能缺口而非计划延后。Rust 实现因 trait `&self` 约束 + 不引入 `RefCell`/unsafe（避免偏离 Java 存储模型）而暂未支持，`remove`/`set_value` panic 并显式标注 "gap"。修复需引入内部可变性（`RefCell<BTreeMap>`）或破坏 trait `&self` 签名，均偏离 Java 模型；留待 `EconomicMapImpl` 移植或评估内部可变性方案时统一处理。
+- **影响**：两类 cursor 的遍历（`advance`/`get_key`/`get_value`）完全可用；仅 `remove`/`set_value` 不可用，但缺口性质不同（`BTreeEconomicMap` 是计划延后，`EconomicMapWrap` 是真实缺口）。
 
 ### 3. Null key 拒绝：Rust 类型系统层面处理
 
@@ -89,7 +91,7 @@ Rust LoC：总计 2393 行（非测试 1486 行 + 测试 907 行）。
 ### 7. 静态工厂方法位置
 
 - **Java**：`EconomicMap`/`EconomicSet` 接口上的 `static` 工厂方法（`create`/`of`/`emptyMap`/`wrapMap`/`emptyCursor`/`emptySet`）。
-- **Rust**：Rust 无 trait static 方法，工厂作为 `BTreeEconomicMap`/`BTreeEconomicSet` 的关联函数。Java 工厂委托 `EconomicMapImpl`/`EconomicMapWrap`/`EmptyMap`，Rust 对应委托 `BTreeEconomicMap`/`EconomicMapWrap`/`EmptyMap`。
+- **Rust**：Rust 无 trait static 方法，工厂作为 `BTreeEconomicMap`/`BTreeEconomicSet` 的关联函数。Java 工厂委托 `EconomicMapImpl`/`EconomicMapWrap`/`EmptyMap`，Rust 对应委托 `BTreeEconomicMap`/`EconomicMapWrap`/`EmptyMap`。`EconomicSet.create(Iterable<E> c)`（Java 25.1 新增）对应 `BTreeEconomicSet::create_from_slice(&[E])`，内部 `create() + add_all_slice(values)`，对齐 Java `set.addAll(c)` → `addAll(Iterator)` → `add` 委托链。
 
 ### 8. 方法重载合并
 
@@ -111,8 +113,16 @@ Rust LoC：总计 2393 行（非测试 1486 行 + 测试 907 行）。
 - **Java**：`Equivalence` 为抽象类，`protected Equivalence()` 构造器允许子类化自定义策略。
 - **Rust**：`Equivalence` 为 `enum`（Copy + Clone + Debug + PartialEq + Eq + Hash），不支持子类化。三种预定义策略（DEFAULT/IDENTITY/IDENTITY_WITH_SYSTEM_HASHCODE）作为枚举变体。完整 `EconomicMapImpl` 移植时可重新引入开放策略抽象。
 
+### 12. Equivalence.hashCode 算法差异（不阻断，待 EconomicMapImpl 对齐）
+
+- **Java**：`Equivalence.hashCode(o)` 对 `DEFAULT`/`IDENTITY` 调用 `o.hashCode()`，对 `IDENTITY_WITH_SYSTEM_HASHCODE` 调用 `System.identityHashCode(o)`（均为 32-bit signed `int`）。
+- **Rust**：`Equivalence::hash_code` 用 `std::collections::hash_map::DefaultHasher`（SipHash）折叠到 `i32`（`DEFAULT`/`IDENTITY`），或对象地址转 `i32`（`IDENTITY_WITH_SYSTEM_HASHCODE`）。算法与 Java 的 `hashCode()`/`System.identityHashCode` 不等价（`DefaultHasher` 是 SipHash-1-3，Java `hashCode` 是各类型自定义的 32-bit 哈希；地址转 `i32` 也非 `identityHashCode` 的真实算法）。
+- **影响**：当前 `BTreeMap`/`BTreeSet` 暂替不依赖哈希（用 `Ord` 排序），`Equivalence::hash_code` 仅作 API 形态镜像，无实际调用路径，不影响行为。完整 `EconomicMapImpl` 移植后（依赖哈希分桶），需对齐 Java 哈希算法（可能需为每种键类型提供 Java 兼容的 `hashCode` 实现，或引入 `IdentityHashCode` trait 抽象）。
+
 ## 自验结果
 
-- `cargo test -p rustci-collections`：**79 passed, 0 failed**
+- `cargo test -p rustci-collections`：**81 passed, 0 failed**
 - `cargo fmt -p rustci-collections -- --check`：**通过**
+- `cargo build -p rustci-collections`：**通过**
+- `cargo clippy -p rustci-collections --all-targets`：**通过**（无 warning）
 - `cargo build --workspace`：**通过**（workspace 全部 crate 编译成功）

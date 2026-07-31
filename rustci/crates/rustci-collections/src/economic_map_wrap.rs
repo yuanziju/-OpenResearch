@@ -1,3 +1,44 @@
+/*
+ * Copyright (c) 2021, 2026, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * The Universal Permissive License (UPL), Version 1.0
+ *
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
+ *
+ * (a) the Software, and
+ *
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ */
+
 // SPDX-License-Identifier: UPL-1.0 OR GPL-2.0-with-classpath-exception
 //
 // Port of `org.graalvm.collections.EconomicMapWrap<K, V>`.
@@ -161,12 +202,25 @@ where
     K: Ord,
 {
     fn remove(&mut self) {
-        // Mirrors the cursor type hierarchy (EconomicMapWrapCursor IS a
-        // MapCursor), but the real remove/setValue semantics of
-        // EconomicMapWrap's cursor (which delegate to the underlying
-        // iterator.remove / entry.setValue in Java) are deferred to the full
-        // EconomicMapImpl port. The stand-in cursor borrows the map
-        // immutably (Java's getEntries is non-mutating) and cannot mutate.
-        panic!("UnsupportedOperationException: EconomicMapWrapCursor.remove is deferred to the EconomicMapImpl port");
+        // GAP (deviation record §2): Java's `EconomicMapWrap.getEntries()`
+        // returns a cursor whose `remove()` delegates to the underlying
+        // `Iterator.remove()` and `setValue()` to `Map.Entry.setValue()`. The
+        // stand-in cursor borrows the map immutably (Java's `getEntries` is
+        // non-mutating, and the trait `UnmodifiableEconomicMap::get_entries`
+        // is `&self`), so it cannot mutate the backing `BTreeMap`. Mutating
+        // cursor support requires either a `&mut self` `get_entries` (breaks
+        // the trait mirror) or interior mutability (`RefCell`, deviates from
+        // Java's storage model); both are deferred. Unlike
+        // `BTreeEconomicMap` (where the real semantics land with the
+        // `EconomicMapImpl` port), this is a true current gap, not a planned
+        // deferral.
+        panic!("UnsupportedOperationException: EconomicMapWrapCursor.remove is not yet implemented (gap: Java EconomicMapWrap cursor supports remove via iterator.remove)");
+    }
+
+    fn set_value(&mut self, _new_value: Option<V>) -> Option<V> {
+        // GAP (see `remove` above): Java's `EconomicMapWrap` cursor supports
+        // `setValue` via `Map.Entry.setValue`. Not yet implemented here for
+        // the same borrow-checker reason documented on `remove`.
+        panic!("UnsupportedOperationException: EconomicMapWrapCursor.set_value is not yet implemented (gap: Java EconomicMapWrap cursor supports setValue via entry.setValue)");
     }
 }

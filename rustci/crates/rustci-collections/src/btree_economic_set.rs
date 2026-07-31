@@ -1,3 +1,44 @@
+/*
+ * Copyright (c) 2017, 2026, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * The Universal Permissive License (UPL), Version 1.0
+ *
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
+ *
+ * (a) the Software, and
+ *
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ */
+
 // SPDX-License-Identifier: UPL-1.0 OR GPL-2.0-with-classpath-exception
 //
 // Reference implementation of `EconomicSet` backed by
@@ -27,6 +68,12 @@ where
     E: Ord,
 {
     inner: BTreeSet<E>,
+    // Retained to mirror `EconomicMapImpl`'s internal strategy storage (Java's
+    // `EconomicSet.create(Equivalence)` delegates to `EconomicMapImpl.create(strategy)`).
+    // Not read back here because `UnmodifiableEconomicSet` does not expose
+    // `getEquivalenceStrategy` (only `UnmodifiableEconomicMap` does); the full
+    // `EconomicMapImpl` port will surface it again.
+    #[allow(dead_code)]
     strategy: Equivalence,
 }
 
@@ -90,6 +137,23 @@ where
         set
     }
 
+    /// Creates a new set with the default `Equivalence::DEFAULT` comparison
+    /// strategy and inserts all elements of `values`. Mirrors
+    /// `EconomicSet.create(Iterable<E> c)` (added in 25.1). The Java overload
+    /// takes `Iterable<E>`; in Rust a slice is the closest ergonomic analog
+    /// (deviation recorded, consistent with `add_all_slice`). The internal
+    /// delegation `create() + addAll(values)` mirrors Java's
+    /// `EconomicSet.create(Iterable)` which calls `set.addAll(c)` →
+    /// `addAll(Iterator)` → `add`.
+    pub fn create_from_slice(values: &[E]) -> Self
+    where
+        E: Clone,
+    {
+        let mut set = Self::create();
+        set.add_all_slice(values);
+        set
+    }
+
     /// Returns an empty, unmodifiable `EconomicSet` singleton view. Mirrors
     /// `EconomicSet.emptySet()`.
     pub fn empty_set() -> EmptySet<E> {
@@ -119,10 +183,6 @@ where
 
     fn iterator(&self) -> Box<dyn Iterator<Item = &E> + '_> {
         Box::new(self.inner.iter())
-    }
-
-    fn get_equivalence_strategy(&self) -> Equivalence {
-        self.strategy
     }
 }
 
