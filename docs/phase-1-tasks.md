@@ -267,18 +267,18 @@ path = "src/lib.rs"
 
 #### T6 — rustci-vm-ci `runtime` 核心接口
 
-- **范围**：在 `crates/rustci-vm-ci/src/runtime/` 下移植 `jdk.vm.ci.runtime` 全部 5 类：
-  - `JVMCI`（→ `rustci_vm_ci::runtime::JVMCI`，运行时获取/初始化入口）
-  - `JVMCIBackend`（meta/code/services 提供者聚合）
-  - `JVMCICompiler`（编译器接口，含 `compileMethod` 签名 — T9 compile0 的下游对接点）
-  - `JVMCICompilerFactory`（编译器工厂选择）
-  - `JVMCIRuntime`（宿主访问入口）
-  - 命名映射：`JVMCI*` → `RustCI*`（spec §2.2），但 trait/类型名保留 `JVMCI` 前缀以 1:1 镜像？**决议**：模块名 `JVMCI→RustCI`，类型名保留 `JVMCI*` 原名以严格 1:1（worker 在 MD 偏离记录确认；若主协调者要求类型名亦改，回填此处）。
+- **范围**：在 `crates/rustci-vm-ci/src/runtime/` 下移植 `jdk.vm.ci.runtime` 全部 5 类（Java 源类名 → Rust 侧类型名，spec §2.2）：
+  - `JVMCI`（Java 源类名）→ `RustCI`（`rustci_vm_ci::runtime::RustCI`，运行时获取/初始化入口）
+  - `JVMCIBackend` → `RustCIBackend`（meta/code/services 提供者聚合）
+  - `JVMCICompiler` → `RustCICompiler`（编译器接口，含 `compileMethod` 签名 — T9 compile0 的下游对接点）
+  - `JVMCICompilerFactory` → `RustCICompilerFactory`（编译器工厂选择）
+  - `JVMCIRuntime` → `RustCIRuntime`（宿主访问入口）
+  - 命名映射：`JVMCI*` → `RustCI*`（spec §2.2）。**决议**：模块名与所有 `JVMCI*` 类型名均替换为 `RustCI*`；方法名/参数名/字段名/方法签名 1:1 保留；JNI 导出符号与 native 方法名（ABI 契约层）保留 `JVMCI` 字样以匹配 HotSpot 查找（如 `JVMCI_OnLoad`）。
 - **依赖**：T4, T5
 - **原 Java 实现参考**：JDK25 `src.zip` → `jdk.internal.vm.ci`，`src/jdk.internal.vm.ci/share/classes/jdk/vm/ci/runtime/`（不在 `/opt/graal`；§6 #1）
 - **验收标准**
   - `cargo test -p rustci-vm-ci` 编译通过
-  - 5 类 trait/struct 1:1 镜像，`JVMCICompiler.compileMethod` 签名与 Java 一致（T9 对接基准）
+  - 5 类 trait/struct 1:1 镜像，`RustCICompiler::compileMethod` 签名与 Java `JVMCICompiler.compileMethod` 一致（T9 对接基准）
   - **集成验收**（第 2 梯）：`cargo test --workspace` + 尝试 `mx build`（§6 #6，跑不动降级并记录）
   - 每 3 任务一次"是否偏离原 Java 实现"彻底复核（覆盖 T4-T5-T6）
 - **worker 闭环粒度**：5 类，单 worker 一轮；本任务收尾触发第 2 梯集成验收。
@@ -289,7 +289,7 @@ path = "src/lib.rs"
 #### T7 — rustci-vm-ci `hotspot` 核心子集 + CompilerToVM ~20 native 声明
 
 - **范围**：在 `crates/rustci-vm-ci/src/hotspot/` 下移植 `jdk.vm.ci.hotspot` 核心子集：
-  - `HotSpotJVMCIRuntime`（含 `compile0` native 声明 — T9 的 Java 侧契约来源）
+  - `HotSpotJVMCIRuntime`（Java 源类名 → Rust 侧 `HotSpotRustCIRuntime`；含 `compile0` native 声明 — T9 的 Java 侧契约来源）
   - `HotSpotCompiledCode`、`HotSpotCompiledNmethod`、`HotSpotCompilationRequestResult`
   - `HotSpotVMConfigStore`、`HotSpotVMConfigAccess`、`VMField`、`VMFlag`
   - `CompilerToVM`：从 132 个 native 方法中**挑选编译/install/配置相关 ~20 个**（spec §3.1），在 Rust 侧声明为对应 `extern "C"` / trait 抽象。**本期仅声明契约与 Rust 侧 trait 转译，不实现 C++ 侧**（C++ 侧由 HotSpot 提供，RustCI 通过 bridge 调入/被调）
@@ -338,7 +338,7 @@ path = "src/lib.rs"
 
 - **范围**：填充 `compile0` 函数体，接通端到端调度链路（spec §3.1 "最小子集打通编译链路"）：
   - JNI 入参解析：`isolate_thread`/`method_handle`/`entry_bci`/`compile_state`/`compile_id`/`options`/`failure_buf`/`time_mem_buf` → Rust 侧类型
-  - 调用 `rustci_vm_ci::runtime::JVMCICompiler::compileMethod`（T6 声明的 trait），通过 `HotSpotJVMCIRuntime`（T7）取得 compiler 实例
+  - 调用 `rustci_vm_ci::runtime::RustCICompiler::compileMethod`（T6 声明的 trait），通过 `HotSpotRustCIRuntime`（T7）取得 compiler 实例
   - 结果回写：`failure_buf`（失败信息）、`time_mem_buf`（编译耗时/内存）
   - 返回 `installedCode` handle（`jlong`）
   - **本期不实现 Graal 图编译**（图编译属第二期）；`compileMethod` 的具体 Graal 实现本期以"调度至 runtime/compiler 接口、句柄与缓冲区完整传递、类型契约对齐 Java `HotSpotJVMCIRuntime.compile0`"为准。verifier 验收调度链路完整性，不验收图编译正确性

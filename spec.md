@@ -24,9 +24,16 @@
 
 Rust `cdylib` 直接对接 HotSpot C++ 底层，跳过 Java JVMCI 中间层。Rust 侧不再经过 Java 桥接对象，而是以原生符号直接与 `CompilerToVM`、`HotSpotJVMCIRuntime` 等 C++ 实现交互。
 
-### 2.2 全量 1:1 镜像 jdk.vm.ci
+### 2.2 全量 1:1 镜像 jdk.vm.ci（JVMCI→RustCI 命名替换）
 
-Rust 侧接口全量 1:1 镜像 `jdk.vm.ci.*`，唯一变更是顶层模块名 `JVMCI → RustCI`（即 `jdk.vm.ci.meta` → `rustci.meta` 之类的命名空间映射）。遵循 Graal 原哲学：忠实映射既有抽象，不做 Rust 惯用化重构，不合并/拆分接口，不改变继承与组合关系。
+Rust 侧接口全量 1:1 镜像 `jdk.vm.ci.*`。为摆脱 JVMCI 命名，所有含 `JVMCI` 字样的 **Rust 内部标识符**替换为 `RustCI`：
+
+- **模块名**：`jdk.vm.ci` → `rustci_vm_ci`（crate `rustci-vm-ci`）。
+- **类型名**：`JVMCI*` → `RustCI*`（如 `JVMCICompiler` → `RustCICompiler`、`JVMCIRuntime` → `RustCIRuntime`、`HotSpotJVMCIRuntime` → `HotSpotRustCIRuntime`、`JVMCIBackend` → `RustCIBackend`）；含 `JVMCI` 字样的复合名一并替换；不含 `JVMCI` 字样的类型名（如 `CompilerToVM`、`HotSpotCompiledCode`、`MetaAccessProvider`）保持原样。
+- **1:1 保留**：方法名、参数名、字段名、方法签名、继承/组合关系、异常路径 —— 与原 Java 实现严格一致，一分不差。
+- **ABI 契约层不可改**：JNI 导出符号名（如 `JVMCI_OnLoad`、`Java_<pkg>_<Class>_<method>`）、`registerNativeMethods` 注册的 native 方法名，必须匹配 HotSpot 运行时期望的符号名，**保留 `JVMCI` 字样**，因为 HotSpot 按这些符号名 `dlopen`/`dlsym` 查找。RustCI 与 HotSpot 共用同一套 C++ 底层函数（`CompilerToVM` 等），仅 Rust 侧命名层替换为 RustCI。
+
+遵循 Graal 原哲学：忠实映射既有抽象，不做 Rust 惯用化重构，不合并/拆分接口，不改变继承与组合关系。
 
 ### 2.3 compiler 侧规模（基线）
 
@@ -75,16 +82,18 @@ Rust 侧接口全量 1:1 镜像 `jdk.vm.ci.*`，唯一变更是顶层模块名 `
 
 ## 5. 环境与保命策略
 
-- `/opt/graal`、`/opt/jdk-src`：持久预装的只读参考源，不在 git 控制下，沙箱重置不回滚。仅供查阅，禁止写入。
-- `/workspace`：virtiofs git 卷。**沙箱重置会回滚到 git 状态**——`/workspace` 下所有产出必须及时 `commit + push` 保命，未提交的改动随时可能丢失。
+- `/opt/graal`、`/opt/jdk-src`、`/opt/jdk-vm-ci-src`：持久预装的只读参考源，不在 git 控制下，沙箱重置不回滚。仅供查阅，禁止写入。
+- `/workspace`：tmpfs 沙箱卷。**沙箱重置会回滚到远程 git 状态**——`/workspace` 下所有产出必须及时 `commit + push` 到 origin 保命；仅 `commit` 不 `push` 不算保命（重置后本地提交也会丢失）。未推送的改动随时可能丢失。
 - 工具约束：`/opt` 下不可用 `Grep`/`Glob`，统一通过 `RunCommand` 访问（如 `rg`、`ls`、`find`）。
 
 ## 6. 工作流
 
-### 6.1 分支
+### 6.1 分支与提交
 
 - 只开一个 `dev` 分支；子代理不开单独分支，全部在 `dev` 上并行。
-- 每个里程碑自动 `commit + push`（Conventional Commits，英文，面向社区）。
+- **每个里程碑必须立即 `commit + push` 到 origin**：沙箱为 tmpfs，环境重置会丢失未推送的工作；任何已完成并通过验收的改动必须先推送再继续下一步（参见 §5）。
+- **提交规范**：Conventional Commits，英文，面向社区正式仓库。格式 `type(scope): subject`，type ∈ `feat|fix|docs|refactor|test|chore|build|ci`，subject 祈使句、首字母小写、不加句号；body 说明 what/why（非 how），每行 ≤72 字符。禁止"清空仓库"之类非正式或中文提交消息。
+- 推送使用主协调者持有的 token（不向子代理透露），URL 形式 `https://<token>@github.com/...`，不持久化到 `git config`。
 
 ### 6.2 子代理闭环
 
@@ -111,7 +120,9 @@ worker 写代码
 - **禁止偷懒实现**：空实现 / 占位 / simple stub 一律禁止。
 - **禁止写 TODO 注释**，除非原 Java 源码本身就有 TODO（届时原样保留语义）。
 - **一切谨遵原 Java 实现已有的参考**：完整移植，非 MVP。行为、边界、异常路径与原实现一致。
-- 不做未要求的重构、不添加未要求的注释 / docstring / 类型标注。
+- **注释风格**：像专业程序员写生产代码，不逐行解释、不写废话 docstring；仅在非自明逻辑处加最少必要注释。不要像给人类讲解一样每个点、每行都加注释。
+- **不做未要求的重构**、不添加未要求的注释 / docstring / 类型标注。
+- **提示词纪律**：派发子代理任务时不写"你是 XX 专家"之类角色设定（研究显示会损害模型泛化能力）；以具体、明确的任务约束与验收标准代替角色扮演。
 - 涉及 native 签名时，以 `/opt/jdk-src` 下 C++ 源为核对基准（见 §10 未确认项）。
 
 ## 8. source map 方案
