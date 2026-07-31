@@ -1,0 +1,13 @@
+[package]
+name = "rustci-collections"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Rust 镜像 org.graalvm.collections；第一期：EconomicMap 族 trait + BTreeMap 参考实现"
+
+[dependencies]
+# 无外部依赖（第一期）；完整 EconomicMapImpl 移植（后续任务）可能引入 unsafe 内部实现
+
+[lib]
+name = "rustci_collections"
+path = "src/lib.rs"

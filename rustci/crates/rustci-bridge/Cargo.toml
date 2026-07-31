@@ -1,0 +1,18 @@
+[package]
+name = "rustci-bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Rust cdylib 桥接层，导出 7 个 JNI 符号供 HotSpot 链接"
+
+[dependencies]
+rustci-vm-ci = { path = "../rustci-vm-ci" }
+rustci-collections = { path = "../rustci-collections" }
+# JNI FFI：优先复用社区 jni crate 的 FFI 类型（JNIEnv/jclass/jlong/jbyteArray 等）。
+# 若 jni crate API 与 spec §9.1 草案不匹配，允许在 crate 内 vendor 最小 FFI 类型定义（不算 stub）。
+jni = "0.21"
+
+[lib]
+name = "rustci_bridge"
+crate-type = ["cdylib", "rlib"]   # cdylib 供 HotSpot dlopen；rlib 供单测链接
+path = "src/lib.rs"

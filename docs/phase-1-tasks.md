@@ -3,7 +3,7 @@
 > 状态：Phase-1 任务拆分 v1
 > 主协调者维护本文件；子代理（worker / verifier / fixer / re-verifier）按本文件认领任务。
 > 配套：`/workspace/spec.md`（架构与纪律）、`/workspace/docs/source-map/README.md`（模块索引与回写规则）。
-> 参考源只读：`/opt/graal`（oracle/graal HEAD）、`/opt/jdk-src`（HotSpot C++ 树，不含 jdk.vm.ci Java 源）。`/opt` 下禁止 `Grep`/`Glob`，统一 `RunCommand`（`rg`/`find`/`wc`/`head`）访问。
+> 参考源只读：`/opt/graal`（oracle/graal HEAD）、`/opt/jdk-vm-ci-src`（JDK25 `jdk.vm.ci` Java 源，213 文件，含 `CompilerToVM.java` 132 native 声明、`HotSpotJVMCIRuntime.compile0`、`JVMCICompiler.compileMethod`，路径前缀 `jdk.internal.vm.ci/jdk/vm/ci/`）、`/opt/jdk-src`（openjdk/jdk master，**确认不含 jvmci C++ 源**，JEP410 演进，仅作其他 hotspot 参考）。`/opt` 下禁止 `Grep`/`Glob`，统一 `RunCommand`（`rg`/`find`/`wc`/`head`）访问。
 
 ---
 

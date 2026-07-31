@@ -67,3 +67,7 @@ htmlcov/
 
 # ===== Vendor reference (read-only, large, not part of project) =====
 /graal/
+
+# ===== Rust workspace (rustci/) =====
+rustci/target/
+rustci/Cargo.lock

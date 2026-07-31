@@ -15,6 +15,14 @@
 
 ---
 
+## Workspace 骨架状态
+
+| 任务 | 范围 | 状态 |
+|---|---|---|
+| T1 | cargo workspace 骨架 + 4 crate 空根打通编译（rustci-collections / rustci-util-json / rustci-vm-ci / rustci-bridge；cdylib `librustci_bridge.so` 已产出） | T1 已完成 |
+
+---
+
 ## 模块清单总表
 
 > 列：模块 / 源 LoC / Rust LoC / 状态 / MD 文件。源 LoC 未统计者记 `—`，子代理开工时填写实测值。

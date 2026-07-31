@@ -1,0 +1,13 @@
+[package]
+name = "rustci-util-json"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Rust 移植 jdk.graal.compiler.util.json（8 类，完整移植）"
+
+[dependencies]
+rustci-collections = { path = "../rustci-collections" }
+
+[lib]
+name = "rustci_util_json"
+path = "src/lib.rs"

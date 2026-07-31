@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/rustci-collections",
+    "crates/rustci-util-json",
+    "crates/rustci-vm-ci",
+    "crates/rustci-bridge",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+# 上游多许可证：org.graalvm.collections = UPL-1.0；jdk.vm.ci / util.json = GPL-2.0 + Classpath Exception。
+# 各 crate 保留上游 Oracle 版权与许可证头（逐文件），此处仅声明包级 SPDX。
+license = "UPL-1.0 OR GPL-2.0-with-classpath-exception"
+repository = "https://github.com/graalvm/graal"   # 上游溯源用
