@@ -24,9 +24,16 @@
 //! 镜像 `jdk.vm.ci.meta.JavaValue`：表示 Java 值的标记接口（无方法）。
 //!
 //! 偏离记录：Java `JavaValue` 为空标记接口。Rust 侧增设 `Debug` 超 trait（持 `Box<dyn JavaValue>`
-//! 的容器需 `Debug` 派生）；不增设 `as_any`，因 `JavaConstant: Constant + JavaValue` 中
-//! `Constant` 已提供 `as_any`，trait 对象下转统一走 `Constant::as_any`（避免双超 trait 同名
-//! 方法歧义）。
+//! 的容器需 `Debug` 派生）。原 T4 不增设 `as_any`（`JavaConstant` 下转统一走 `Constant::as_any`）；
+//! 引入 `code::ValueUtil` 后需对 bare `&dyn JavaValue` 做 `instanceof` 下转（`VirtualObject`/
+//! `StackLockValue`/`IllegalValue` 均为 `JavaValue` 但非 `Constant`，`Constant::as_any` 不可达），
+//! 故增设 `Any` 超 trait + 必需方法 `as_any`（各实现返回 `self`；`NullConstant`/`PrimitiveConstant`/
+//! `RawConstant`/`IllegalValue` 等实现同步补齐）。`Constant::as_any` 与本方法同名，但既有调用均经
+//! `&dyn Constant`/`&dyn JavaValue` 单一 trait 对象分派，无歧义。
 
 /// 标记实现：表示一个 Java 值。对应 Java `interface JavaValue`（空标记接口）。
-pub trait JavaValue: std::fmt::Debug {}
+pub trait JavaValue: std::fmt::Debug + std::any::Any {
+    /// Rust 增设：支持 `code::ValueUtil` 对 `&dyn JavaValue` 的 `instanceof` 下转。
+    /// 各实现返回 `self`（实现类型为 `'static` Sized，可 coerce 到 `&dyn Any`）。
+    fn as_any(&self) -> &dyn std::any::Any;
+}

@@ -107,7 +107,11 @@ impl Constant for NullConstant {
     }
 }
 
-impl JavaValue for NullConstant {}
+impl JavaValue for NullConstant {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
 
 impl fmt::Display for NullConstant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

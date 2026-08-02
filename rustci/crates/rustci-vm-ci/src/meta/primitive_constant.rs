@@ -162,7 +162,11 @@ impl Constant for PrimitiveConstant {
     }
 }
 
-impl JavaValue for PrimitiveConstant {}
+impl JavaValue for PrimitiveConstant {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
 
 impl SerializableConstant for PrimitiveConstant {
     fn get_serialized_size(&self) -> i32 {

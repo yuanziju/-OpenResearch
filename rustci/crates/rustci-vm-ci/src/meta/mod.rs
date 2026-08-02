@@ -25,6 +25,7 @@
 //! `rustci_vm_ci::meta`：镜像 `jdk.vm.ci.meta` 核心接口与 final class 子集（T4）。
 
 pub mod abstract_java_profile;
+pub mod allocatable_value;
 pub mod annotated;
 pub mod annotation_data;
 pub mod assumptions;
@@ -70,6 +71,8 @@ pub mod tri_state;
 pub mod unresolved_java_field;
 pub mod unresolved_java_method;
 pub mod unresolved_java_type;
+pub mod value;
+pub mod value_kind;
 pub mod vm_constant;
 
 #[cfg(test)]

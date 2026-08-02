@@ -115,7 +115,11 @@ impl Constant for RawConstant {
     }
 }
 
-impl JavaValue for RawConstant {}
+impl JavaValue for RawConstant {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
 
 impl SerializableConstant for RawConstant {
     fn get_serialized_size(&self) -> i32 {
