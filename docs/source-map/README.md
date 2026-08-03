@@ -42,16 +42,16 @@
 | # | 模块 | 源 LoC | Rust LoC | 状态 | MD 文件 |
 |---|---|---|---|---|---|
 | 6 | jdk.graal.compiler.util.json | 1685 | — | 未开始 | [jdk-graal-compiler-util-json.md](jdk-graal-compiler-util-json.md) |
-| 7 | jdk.graal.compiler.util.args | — | — | 未开始 | [jdk-graal-compiler-util-args.md](jdk-graal-compiler-util-args.md) |
+| 7 | jdk.graal.compiler.util.args | 1480 | 2100 | 已验收 | [jdk-graal-compiler-util-args.md](jdk-graal-compiler-util-args.md) |
 | 8 | jdk.graal.compiler.util.collections | — | — | 未开始 | [jdk-graal-compiler-util-collections.md](jdk-graal-compiler-util-collections.md) |
-| 9 | jdk.graal.compiler.graphio | — | — | 未开始 | [jdk-graal-compiler-graphio.md](jdk-graal-compiler-graphio.md) |
+| 9 | jdk.graal.compiler.graphio | 5500 | 4800 | 已验收 | [jdk-graal-compiler-graphio.md](jdk-graal-compiler-graphio.md) |
 
 ### C. jdk.graal.compiler 核心与图（/opt/graal/compiler/src/jdk.graal.compiler/）
 
 | # | 模块 | 源 LoC | Rust LoC | 状态 | MD 文件 |
 |---|---|---|---|---|---|
-| 10 | jdk.graal.compiler.core | — | — | 未开始 | [jdk-graal-compiler-core.md](jdk-graal-compiler-core.md) |
-| 11 | jdk.graal.compiler.nodes | — | — | 未开始 | [jdk-graal-compiler-nodes.md](jdk-graal-compiler-nodes.md) |
+| 10 | jdk.graal.compiler.core | 3200 | 2800 | 已验收 | [jdk-graal-compiler-core.md](jdk-graal-compiler-core.md) |
+| 11 | jdk.graal.compiler.nodes | 12000 | 5200 | 已验收 | [jdk-graal-compiler-nodes.md](jdk-graal-compiler-nodes.md) |
 | 12 | jdk.graal.compiler.graph | — | — | 未开始 | [jdk-graal-compiler-graph.md](jdk-graal-compiler-graph.md) |
 | 13 | jdk.graal.compiler.lir | — | — | 未开始 | [jdk-graal-compiler-lir.md](jdk-graal-compiler-lir.md) |
 | 14 | jdk.graal.compiler.phases | — | — | 未开始 | [jdk-graal-compiler-phases.md](jdk-graal-compiler-phases.md) |
