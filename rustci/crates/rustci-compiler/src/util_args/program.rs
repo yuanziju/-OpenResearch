@@ -27,43 +27,46 @@
 //
 // Rust mirror of `jdk.graal.compiler.util.args.Program`.
 
+use std::cell::RefCell;
 use std::fmt;
+use std::rc::Rc;
 
 use rustci_collections::pair::Pair;
 
 use crate::util_args::command::Command;
 use crate::util_args::command_parsing_exception::CommandParsingException;
 use crate::util_args::help_requested_exception::HelpRequestedException;
-use crate::util_args::option_value::{print_indented, INDENT};
+use crate::util_args::option_value::{print_indented, AnyOptionValue, INDENT};
 use crate::util_args::unknown_argument_exception::UnknownArgumentException;
 
 /// Main entry-point of command-line parsing.
 /// Mirrors `jdk.graal.compiler.util.args.Program`.
 pub struct Program {
-    command: Command,
+    command: Rc<RefCell<Command>>,
 }
 
 impl Program {
     pub fn new(name: String, description: String) -> Self {
         Program {
-            command: Command::new(name, description),
+            command: Rc::new(RefCell::new(Command::new(name, description))),
         }
     }
 
     /// Returns a mutable reference to the underlying Command for configuration.
-    pub fn command_mut(&mut self) -> &mut Command {
-        &mut self.command
+    pub fn command_mut(&mut self) -> std::cell::RefMut<'_, Command> {
+        self.command.borrow_mut()
     }
 
     /// Parses the full array of command-line arguments and handles any errors.
     /// Mirrors `Program.parseAndValidate(String[], boolean)`.
     pub fn parse_and_validate(&self, args: &[String], error_is_fatal: bool) {
-        match self.command.parse(args, 0) {
+        let command = self.command.borrow();
+        match command.parse(args, 0) {
             Ok(parsed) => {
                 if parsed < args.len() {
                     let err = CommandParsingException::new(
                         &UnknownArgumentException::new(&args[parsed]),
-                        self.command.get_name().to_string(),
+                        Rc::clone(&self.command),
                     );
                     eprintln!("{}", err);
                     if error_is_fatal {
@@ -95,14 +98,14 @@ impl Program {
     /// Prints the full help message.
     /// Mirrors `Program.printHelp(PrintWriter)`.
     pub fn print_help(&self, writer: &mut dyn fmt::Write) -> fmt::Result {
-        let mut positional: Vec<String> = Vec::new();
-        let mut named: Vec<Pair<String, String>> = Vec::new();
-        self.command.collect_options(&mut positional, &mut named);
+        let mut positional: Vec<Rc<RefCell<Box<dyn AnyOptionValue>>>> = Vec::new();
+        let mut named: Vec<Pair<String, Rc<RefCell<Box<dyn AnyOptionValue>>>>> = Vec::new();
+        self.command.borrow().collect_options(&mut positional, &mut named);
 
         writeln!(writer)?;
         writeln!(writer, "USAGE:")?;
         writer.write_str(INDENT)?;
-        self.command.print_usage(writer)?;
+        self.command.borrow().print_usage(writer)?;
         writeln!(writer)?;
 
         if !positional.is_empty() {
@@ -114,7 +117,9 @@ impl Program {
             if separate {
                 writeln!(writer)?;
             }
-            print_indented(writer, arg, 1)?;
+            let borrowed = arg.borrow();
+            print_indented(writer, &borrowed.get_usage(false), 1)?;
+            borrowed.print_help(writer, 2)?;
             separate = true;
         }
 
@@ -129,8 +134,14 @@ impl Program {
             }
             let empty = String::new();
             let name = pair.get_left().unwrap_or(&empty);
-            let option = pair.get_right().unwrap_or(&empty);
-            print_indented(writer, &format!("{} {}", name, option), 1)?;
+            let option = pair.get_right().unwrap();
+            let opt = option.borrow();
+            print_indented(
+                writer,
+                &format!("{} {}", name, opt.get_usage(false)),
+                1,
+            )?;
+            opt.print_help(writer, 2)?;
             separate = true;
         }
         Ok(())

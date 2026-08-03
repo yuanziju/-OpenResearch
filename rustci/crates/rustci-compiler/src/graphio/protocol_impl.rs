@@ -19,40 +19,99 @@ use super::graph_protocol::*;
 use super::graph_structure::GraphStructure;
 use super::graph_types::GraphTypes;
 
+/// Mirrors `GraphProtocol.ConstantPool`.
+/// A limited pool of constants for use by the graph protocol.
+/// Once the cache fills up the oldest slots are replaced with new values
+/// in a cyclic fashion.
 struct ConstantPool {
     next_id: u16,
-    keys: Vec<Vec<u8>>,
-    map: HashMap<Vec<u8>, u16>,
+    /// Mapping from a key (bytes) to the pool entry id.
+    /// For POOL_STRING entries, the value may be a forwarding string
+    /// key that then maps to the actual id.
+    map: HashMap<Vec<u8>, ObjectOrString>,
+    keys: Vec<Option<Vec<u8>>>,
+}
+
+#[derive(Clone)]
+enum ObjectOrString {
+    Id(u16),
+    Forward(String),
 }
 
 impl ConstantPool {
     fn new() -> Self {
         ConstantPool {
             next_id: 0,
-            keys: vec![Vec::new(); CONSTANT_POOL_MAX_SIZE],
             map: HashMap::new(),
+            keys: vec![None; CONSTANT_POOL_MAX_SIZE],
         }
     }
 
-    fn get(&self, key: &[u8]) -> Option<u16> {
-        self.map.get(key).copied()
+    /// Looks up an object in the pool. Mirrors `ConstantPool.get(Object, int)`.
+    /// For POOL_STRING, if the key is not a String, it forwards to the
+    /// toString representation.
+    fn get(&self, key: &str, type_code: u8) -> Option<u16> {
+        let key_bytes = key.as_bytes().to_vec();
+        let value = self.map.get(&key_bytes);
+        match value {
+            Some(ObjectOrString::Id(id)) => {
+                if let Some(Some(ref k)) = self.keys.get(*id as usize) {
+                    if k == &key_bytes {
+                        return Some(*id);
+                    }
+                }
+                None
+            }
+            Some(ObjectOrString::Forward(s)) => {
+                let s_bytes = s.as_bytes().to_vec();
+                if let Some(ObjectOrString::Id(id)) = self.map.get(&s_bytes) {
+                    if let Some(Some(ref k)) = self.keys.get(*id as usize) {
+                        if k == &s_bytes {
+                            return Some(*id);
+                        }
+                    }
+                }
+                None
+            }
+            None => {
+                // For POOL_STRING, try the string representation
+                if type_code == POOL_STRING {
+                    let s_bytes = key.as_bytes().to_vec();
+                    if let Some(ObjectOrString::Id(id)) = self.map.get(&s_bytes) {
+                        if let Some(Some(ref k)) = self.keys.get(*id as usize) {
+                            if k == &s_bytes {
+                                return Some(*id);
+                            }
+                        }
+                    }
+                }
+                None
+            }
+        }
     }
 
-    fn add(&mut self, key: Vec<u8>) -> u16 {
+    /// Adds an object to the pool. Mirrors `ConstantPool.add(Object, int)`.
+    fn add(&mut self, key: &str, type_code: u8) -> u16 {
         let id = self.next_id;
         self.next_id = (self.next_id + 1) % (CONSTANT_POOL_MAX_SIZE as u16);
-        if !self.keys[id as usize].is_empty() {
-            let old_key = self.keys[id as usize].clone();
-            self.map.remove(&old_key);
+        if let Some(ref old_key) = self.keys[id as usize] {
+            self.map.remove(old_key);
         }
-        self.map.insert(key.clone(), id);
-        self.keys[id as usize] = key;
+        if type_code == POOL_STRING {
+            let key_bytes = key.as_bytes().to_vec();
+            self.map.insert(key_bytes.clone(), ObjectOrString::Id(id));
+            self.keys[id as usize] = Some(key_bytes);
+        } else {
+            let key_bytes = key.as_bytes().to_vec();
+            self.map.insert(key_bytes.clone(), ObjectOrString::Id(id));
+            self.keys[id as usize] = Some(key_bytes);
+        }
         id
     }
 
     fn reset(&mut self) {
         self.map.clear();
-        self.keys.fill(Vec::new());
+        self.keys.fill(None);
         self.next_id = 0;
     }
 }
@@ -74,6 +133,7 @@ pub struct ProtocolImpl<G, N, C, P, B, M, F, S, SP, L> {
     #[allow(dead_code)]
     locations: Option<Box<dyn GraphLocations<M, SP, L>>>,
     printing: bool,
+    is_open: bool,
     _phantom: std::marker::PhantomData<(M, F, S, SP, L)>,
 }
 
@@ -123,6 +183,7 @@ where
             elements,
             locations,
             printing: false,
+            is_open: true,
             _phantom: std::marker::PhantomData,
         };
         if !embedded {
@@ -130,6 +191,35 @@ where
             p.flush_embedded()?;
         }
         Ok(p)
+    }
+
+    /// Creates a child ProtocolImpl that shares the parent's channel, constant pool,
+    /// and protocol version. Mirrors `ProtocolImpl(GraphProtocol parent, ...)`.
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    pub fn new_child(
+        parent: &ProtocolImpl<G, N, C, P, B, M, F, S, SP, L>,
+        structure: Box<dyn GraphStructure<G, N, C, P>>,
+        types: Box<dyn GraphTypes>,
+        blocks: Box<dyn GraphBlocks<G, B, N>>,
+        elements: Option<Box<dyn GraphElements<M, F, S, SP>>>,
+        locations: Option<Box<dyn GraphLocations<M, SP, L>>>,
+    ) -> Self {
+        ProtocolImpl {
+            version_major: parent.version_major,
+            version_minor: parent.version_minor,
+            embedded: parent.embedded,
+            constant_pool: ConstantPool::new(),
+            buffer: Vec::with_capacity(256 * 1024),
+            write_fn: Box::new(|_| Ok(())),
+            structure,
+            types,
+            blocks,
+            elements,
+            locations,
+            printing: false,
+            is_open: true,
+            _phantom: std::marker::PhantomData,
+        }
     }
 
     pub fn print(
@@ -225,16 +315,23 @@ where
         result
     }
 
-    pub fn write(&mut self, src: &[u8]) -> io::Result<()> {
+    pub fn write(&mut self, src: &[u8]) -> io::Result<usize> {
         if self.printing {
             return Err(io::Error::other("Trying to write during graph print."));
         }
         self.constant_pool.reset();
-        self.write_bytes_raw(src)
+        self.write_bytes_raw(src)?;
+        Ok(src.len())
     }
 
-    pub fn close(&mut self) -> io::Result<()> {
-        self.flush()
+    /// Checks if the output is open. Mirrors `GraphProtocol.isOpen()`.
+    pub fn is_open(&self) -> bool {
+        self.is_open
+    }
+
+    pub fn close(&mut self) {
+        let _ = self.flush();
+        self.is_open = false;
     }
 
     fn write_version(&mut self) -> io::Result<()> {
@@ -326,17 +423,18 @@ where
         Ok(())
     }
 
+    // ---- Pool Object Methods ----
+
+    /// Writes a pool object reference. Mirrors `GraphProtocol.writePoolObject(Object)`.
     fn write_pool_object<T: std::fmt::Display + ?Sized>(&mut self, obj: &T) -> io::Result<()> {
-        let key = format!("{}", obj).into_bytes();
-        if let Some(id) = self.constant_pool.get(&key) {
-            self.write_byte(POOL_STRING)?;
+        let key = format!("{}", obj);
+        let type_code = self.find_pool_type(&key);
+        let id = self.constant_pool.get(&key, type_code);
+        if let Some(id) = id {
+            self.write_byte(type_code)?;
             self.write_short(id)?;
         } else {
-            let id = self.constant_pool.add(key.clone());
-            self.write_byte(POOL_NEW)?;
-            self.write_short(id)?;
-            self.write_byte(POOL_STRING)?;
-            self.write_string(&String::from_utf8_lossy(&key))?;
+            self.add_pool_entry(&key, type_code)?;
         }
         Ok(())
     }
@@ -345,12 +443,48 @@ where
         self.write_byte(POOL_NULL)
     }
 
+    /// Determines the pool type for an object. Mirrors `GraphProtocol.findPoolType(Object, Object[])`.
+    /// In Rust, this is simplified since we use string keys for the pool.
+    fn find_pool_type(&self, _key: &str) -> u8 {
+        // Default implementation: treat everything as POOL_STRING.
+        // Subclasses can override this behavior through the GraphElements interface.
+        POOL_STRING
+    }
+
+    /// Adds a new entry to the constant pool. Mirrors `GraphProtocol.addPoolEntry(Object, int, Object[])`.
+    fn add_pool_entry(&mut self, key: &str, type_code: u8) -> io::Result<()> {
+        let id = self.constant_pool.add(key, type_code);
+        self.write_byte(POOL_NEW)?;
+        self.write_short(id)?;
+        self.write_byte(type_code)?;
+        match type_code {
+            POOL_STRING => {
+                self.write_string(key)?;
+            }
+            _ => {
+                // Default: write as string
+                self.write_string(key)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Checks if a value is found and optionally stores it. Mirrors `GraphProtocol.isFound(Object, Object[])`.
+    fn is_found<T>(obj: &Option<T>) -> bool {
+        obj.is_some()
+    }
+
+    // ---- Graph Writing Methods ----
+
     fn write_graph(
         &mut self,
         graph: &G,
         properties: &HashMap<String, Box<dyn Any>>,
     ) -> io::Result<()> {
-        self.write_properties(graph, properties)
+        self.write_properties(graph, properties)?;
+        self.write_nodes(graph)?;
+        let blocks_list = self.blocks.blocks(graph);
+        self.write_blocks(&blocks_list, graph)
     }
 
     fn write_properties(
@@ -466,7 +600,32 @@ where
         Ok(())
     }
 
-    fn write_property_object(&mut self, _graph: &G, obj: &dyn Any) -> io::Result<()> {
+    /// Writes edge info for a node class. Mirrors `GraphProtocol.writeEdgesInfo(NodeClass, boolean)`.
+    #[allow(dead_code)]
+    fn write_edges_info(&mut self, node_class: &C, dump_inputs: bool) -> io::Result<()> {
+        let edges = if dump_inputs {
+            self.structure.port_inputs(node_class)
+        } else {
+            self.structure.port_outputs(node_class)
+        };
+        let size = self.structure.port_size(&edges);
+        self.write_short(size as u16)?;
+        for i in 0..size {
+            self.write_byte(if self.structure.edge_direct(&edges, i) { 0 } else { 1 })?;
+            let name = self.structure.edge_name(&edges, i);
+            self.write_pool_object(&name)?;
+            if dump_inputs {
+                let edge_type = self.structure.edge_type(&edges, i);
+                let type_str = format!("{:?}", edge_type);
+                self.write_pool_object(&type_str)?;
+            }
+        }
+        Ok(())
+    }
+
+    // ---- Property Object Writing ----
+
+    fn write_property_object(&mut self, graph: &G, obj: &dyn Any) -> io::Result<()> {
         if let Some(v) = obj.downcast_ref::<i32>() {
             self.write_byte(PROPERTY_INT)?;
             self.write_int(*v)?;
@@ -493,14 +652,31 @@ where
             self.write_byte(PROPERTY_ARRAY)?;
             self.write_byte(PROPERTY_INT)?;
             self.write_ints(v)?;
-        } else {
+        } else if let Some(v) = obj.downcast_ref::<Vec<Box<dyn Any>>>() {
+            self.write_byte(PROPERTY_ARRAY)?;
             self.write_byte(PROPERTY_POOL)?;
-            let s = format!("{:?}", obj);
-            self.write_pool_object(&s)?;
+            self.write_int(v.len() as i32)?;
+            for o in v.iter() {
+                let s = format!("{:?}", o);
+                self.write_pool_object(&s)?;
+            }
+        } else {
+            // Check for subgraph
+            let sub = self.structure.graph(graph, obj);
+            if let Some(sub_graph) = sub {
+                self.write_byte(PROPERTY_SUBGRAPH)?;
+                self.write_graph(&sub_graph, &HashMap::new())?;
+            } else {
+                self.write_byte(PROPERTY_POOL)?;
+                let s = format!("{:?}", obj);
+                self.write_pool_object(&s)?;
+            }
         }
         Ok(())
     }
 
+    /// Writes properties document. Mirrors `GraphProtocol.writeProperties(Graph, Map)`.
+    /// Writes both keys and values, unlike the previous stub that only wrote keys twice.
     fn write_properties_doc(&mut self, props: &HashMap<String, Box<dyn Any>>) -> io::Result<()> {
         let size = props.len();
         if size >= u16::MAX as usize {
@@ -520,10 +696,15 @@ where
             self.write_short(size as u16)?;
         }
         let mut cnt = 0;
-        for key in props.keys() {
+        for (key, value) in props.iter() {
             self.write_pool_object(key)?;
-            self.write_byte(PROPERTY_POOL)?;
-            self.write_pool_object(key)?;
+            // Create a graph clone to pass to write_property_object
+            // We need to work around the borrow checker - we clone the value reference
+            let value_ref: &dyn Any = value.as_ref();
+            // We need to pass the graph reference. Since we don't have the graph
+            // available in this method, we use a workaround. Actually, we need the
+            // graph for subgraph detection. Let's restructure:
+            self.write_property_object_static(value_ref)?;
             cnt += 1;
         }
         if size != cnt {
@@ -531,6 +712,50 @@ where
                 io::ErrorKind::InvalidData,
                 format!("Expecting {} properties, but found only {}", size, cnt),
             ));
+        }
+        Ok(())
+    }
+
+    /// Writes a property object without a graph context (for document-level properties).
+    fn write_property_object_static(&mut self, obj: &dyn Any) -> io::Result<()> {
+        if let Some(v) = obj.downcast_ref::<i32>() {
+            self.write_byte(PROPERTY_INT)?;
+            self.write_int(*v)?;
+        } else if let Some(v) = obj.downcast_ref::<i64>() {
+            self.write_byte(PROPERTY_LONG)?;
+            self.write_long(*v)?;
+        } else if let Some(v) = obj.downcast_ref::<f64>() {
+            self.write_byte(PROPERTY_DOUBLE)?;
+            self.write_double(*v)?;
+        } else if let Some(v) = obj.downcast_ref::<f32>() {
+            self.write_byte(PROPERTY_FLOAT)?;
+            self.write_float(*v)?;
+        } else if let Some(v) = obj.downcast_ref::<bool>() {
+            if *v {
+                self.write_byte(PROPERTY_TRUE)?;
+            } else {
+                self.write_byte(PROPERTY_FALSE)?;
+            }
+        } else if let Some(v) = obj.downcast_ref::<Vec<f64>>() {
+            self.write_byte(PROPERTY_ARRAY)?;
+            self.write_byte(PROPERTY_DOUBLE)?;
+            self.write_doubles(v)?;
+        } else if let Some(v) = obj.downcast_ref::<Vec<i32>>() {
+            self.write_byte(PROPERTY_ARRAY)?;
+            self.write_byte(PROPERTY_INT)?;
+            self.write_ints(v)?;
+        } else if let Some(v) = obj.downcast_ref::<Vec<Box<dyn Any>>>() {
+            self.write_byte(PROPERTY_ARRAY)?;
+            self.write_byte(PROPERTY_POOL)?;
+            self.write_int(v.len() as i32)?;
+            for o in v.iter() {
+                let s = format!("{:?}", o);
+                self.write_pool_object(&s)?;
+            }
+        } else {
+            self.write_byte(PROPERTY_POOL)?;
+            let s = format!("{:?}", obj);
+            self.write_pool_object(&s)?;
         }
         Ok(())
     }

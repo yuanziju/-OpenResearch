@@ -91,4 +91,8 @@ impl AnyOptionValue for Flag {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
+
+    fn get_parsed_value(&self) -> Option<Box<dyn Any>> {
+        self.value.map(|v| Box::new(v) as Box<dyn Any>)
+    }
 }

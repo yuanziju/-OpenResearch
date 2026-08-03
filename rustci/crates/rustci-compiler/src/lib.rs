@@ -30,5 +30,7 @@
 // (BooleanValue, DoubleValue, IntegerValue, ListValue, MultiChoiceValue,
 // StringValue, Flag), plus exception types.
 
+pub mod core;
 pub mod graphio;
+pub mod nodes;
 pub mod util_args;

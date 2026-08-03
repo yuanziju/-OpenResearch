@@ -16,6 +16,7 @@ pub mod builder;
 pub mod constant_pool;
 pub mod data_source;
 pub mod graph_parser;
+pub mod model;
 pub mod name_translator;
 pub mod parse_monitor;
 pub mod skip_root_exception;

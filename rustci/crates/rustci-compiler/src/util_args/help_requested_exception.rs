@@ -25,29 +25,27 @@
 
 // SPDX-License-Identifier: GPL-2.0-with-classpath-exception
 
+use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
+use std::rc::Rc;
+
+use crate::util_args::command::Command;
 
 /// Thrown when a `--help` flag is encountered when parsing command-line arguments.
 /// Mirrors `jdk.graal.compiler.util.args.HelpRequestedException`.
-#[derive(Debug)]
-#[allow(dead_code)]
 pub struct HelpRequestedException {
     /// The command that the user requested help for.
-    command: *const (), // opaque reference to Command; actual Command is passed via the parse method
-    command_name: String,
+    command: Rc<RefCell<Command>>,
 }
 
 impl HelpRequestedException {
-    pub(crate) fn new(command_name: String) -> Self {
-        HelpRequestedException {
-            command: std::ptr::null(),
-            command_name,
-        }
+    pub(crate) fn new(command: Rc<RefCell<Command>>) -> Self {
+        HelpRequestedException { command }
     }
 
-    pub fn get_command_name(&self) -> &str {
-        &self.command_name
+    pub fn get_command(&self) -> Rc<RefCell<Command>> {
+        Rc::clone(&self.command)
     }
 }
 
@@ -58,3 +56,9 @@ impl fmt::Display for HelpRequestedException {
 }
 
 impl Error for HelpRequestedException {}
+
+impl std::fmt::Debug for HelpRequestedException {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HelpRequestedException").finish()
+    }
+}

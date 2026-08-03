@@ -14,21 +14,31 @@ use super::graph_types::GraphTypes;
 /// `Class`-like objects. In Rust, custom enum recognition is delegated to
 /// the user-provided implementation; this default simply returns `None`/`-1`
 /// for all queries.
-pub struct DefaultGraphTypes;
+/// Mirrors `jdk.graal.compiler.graphio.DefaultGraphTypes`.
+/// This is a singleton - use `DefaultGraphTypes::default_instance()` or `default_instance_box()`.
+pub struct DefaultGraphTypes {
+    _private: (), // private field prevents external construction
+}
+
+/// The singleton instance, mirroring `DefaultGraphTypes.DEFAULT`.
+static DEFAULT_GRAPH_TYPES: DefaultGraphTypes = DefaultGraphTypes { _private: () };
 
 impl DefaultGraphTypes {
-    pub fn new() -> Self {
-        DefaultGraphTypes
+    /// Returns the singleton instance. Mirrors `DefaultGraphTypes.DEFAULT`.
+    pub fn default_instance() -> &'static Self {
+        &DEFAULT_GRAPH_TYPES
     }
 
-    pub fn default_instance() -> Self {
-        DefaultGraphTypes
+    /// Returns a boxed singleton instance for use as `Box<dyn GraphTypes>`.
+    /// Mirrors `DefaultGraphTypes.DEFAULT` which is `static final GraphTypes DEFAULT`.
+    pub fn default_instance_box() -> Box<dyn GraphTypes> {
+        Box::new(DefaultGraphTypes { _private: () })
     }
 }
 
 impl Default for DefaultGraphTypes {
     fn default() -> Self {
-        DefaultGraphTypes
+        DefaultGraphTypes { _private: () }
     }
 }
 

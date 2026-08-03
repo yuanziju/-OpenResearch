@@ -90,6 +90,7 @@ impl AnyOptionValue for ListValue {
             return Ok(false);
         }
         let arg = arg.unwrap();
+        // Attempt to parse the inner value. If it fails, terminate the list.
         let parsed = match self.inner.parse_value(Some(arg)) {
             Ok(v) => v,
             Err(_e) => {
@@ -100,7 +101,11 @@ impl AnyOptionValue for ListValue {
             self.value = Some(Vec::new());
         }
         if let Some(ref mut v) = self.value {
-            v.push(Box::new(self.inner.get_name().to_string()));
+            // Store the actual parsed value from the inner option.
+            // Mirroring Java: value.add(inner.value);
+            if let Some(inner_value) = self.inner.get_parsed_value() {
+                v.push(inner_value);
+            }
         }
         Ok(parsed)
     }
@@ -135,5 +140,10 @@ impl AnyOptionValue for ListValue {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn get_parsed_value(&self) -> Option<Box<dyn Any>> {
+        // ListValue stores multiple values; can't return a single parsed value
+        None
     }
 }

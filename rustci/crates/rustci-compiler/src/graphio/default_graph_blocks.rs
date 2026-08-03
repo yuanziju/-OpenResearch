@@ -11,22 +11,32 @@
 use super::graph_blocks::GraphBlocks;
 
 /// Default implementation of `GraphBlocks` that returns empty collections.
-/// Useful when a graph has no block structure.
-pub struct DefaultGraphBlocks;
+/// Mirrors `jdk.graal.compiler.graphio.DefaultGraphBlocks`.
+/// This is a singleton - use `DefaultGraphBlocks::empty()` or `empty_box()`.
+pub struct DefaultGraphBlocks {
+    _private: (), // private field prevents external construction
+}
+
+/// The singleton instance, mirroring `DefaultGraphBlocks.DEFAULT`.
+static DEFAULT_GRAPH_BLOCKS: DefaultGraphBlocks = DefaultGraphBlocks { _private: () };
 
 impl DefaultGraphBlocks {
-    pub fn new() -> Self {
-        DefaultGraphBlocks
+    /// Returns the singleton instance, type-erased for any graph/node types.
+    /// Mirrors `DefaultGraphBlocks.empty()`.
+    pub fn empty<G, N>() -> &'static Self {
+        &DEFAULT_GRAPH_BLOCKS
     }
 
-    pub fn empty() -> Self {
-        DefaultGraphBlocks
+    /// Returns a boxed singleton instance for use as `Box<dyn GraphBlocks<G, (), N>>`.
+    /// Mirrors `DefaultGraphBlocks.empty()` which returns `GraphBlocks<G, B, N>`.
+    pub fn empty_box<G: 'static, N: 'static>() -> Box<dyn GraphBlocks<G, (), N>> {
+        Box::new(DefaultGraphBlocks { _private: () })
     }
 }
 
 impl Default for DefaultGraphBlocks {
     fn default() -> Self {
-        DefaultGraphBlocks
+        DefaultGraphBlocks { _private: () }
     }
 }
 

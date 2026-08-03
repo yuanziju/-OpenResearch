@@ -29,6 +29,7 @@
 
 use std::cell::RefCell;
 use std::fmt;
+use std::rc::Rc;
 
 use rustci_collections::btree_economic_map::BTreeEconomicMap;
 use rustci_collections::economic_map::{EconomicMap, UnmodifiableEconomicMap};
@@ -58,20 +59,29 @@ pub const HELP: &str = "--help";
 /// Mirrors `jdk.graal.compiler.util.args.Command`.
 pub struct Command {
     /// Map of argument names to named arguments.
-    named: BTreeEconomicMap<String, RefCell<Box<dyn AnyOptionValue>>>,
+    named: BTreeEconomicMap<String, Rc<RefCell<Box<dyn AnyOptionValue>>>>,
 
     /// List of positional arguments.
-    positional: Vec<RefCell<Box<dyn AnyOptionValue>>>,
+    positional: Vec<Rc<RefCell<Box<dyn AnyOptionValue>>>>,
 
     name: String,
     description: String,
 }
 
+impl std::fmt::Debug for Command {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Command")
+            .field("name", &self.name)
+            .field("description", &self.description)
+            .finish()
+    }
+}
+
 /// Represents a reference to an option value cell, used during parsing
 /// to track which option value to parse next.
 enum OptionRef<'a> {
-    Named(&'a RefCell<Box<dyn AnyOptionValue>>),
-    Positional(&'a RefCell<Box<dyn AnyOptionValue>>),
+    Named(&'a Rc<RefCell<Box<dyn AnyOptionValue>>>),
+    Positional(&'a Rc<RefCell<Box<dyn AnyOptionValue>>>),
 }
 
 impl Command {
@@ -86,20 +96,27 @@ impl Command {
 
     /// Appends an option to the list of positional options.
     /// Mirrors `Command.addPositional(OptionValue<T>)`.
-    pub fn add_positional(&mut self, argument: Box<dyn AnyOptionValue>) {
-        self.positional.push(RefCell::new(argument));
+    pub fn add_positional(&mut self, argument: Box<dyn AnyOptionValue>) -> Rc<RefCell<Box<dyn AnyOptionValue>>> {
+        let rc = Rc::new(RefCell::new(argument));
+        self.positional.push(Rc::clone(&rc));
+        rc
     }
 
     /// Adds an option to the set of named options.
     /// Mirrors `Command.addNamed(String, OptionValue<T>)`.
-    pub fn add_named(&mut self, option_name: String, argument: Box<dyn AnyOptionValue>) {
-        self.named.put(option_name, Some(RefCell::new(argument)));
+    pub fn add_named(&mut self, option_name: String, argument: Box<dyn AnyOptionValue>) -> Rc<RefCell<Box<dyn AnyOptionValue>>> {
+        let rc = Rc::new(RefCell::new(argument));
+        self.named.put(option_name, Some(Rc::clone(&rc)));
+        rc
     }
 
     /// Adds a subcommand group to this command.
     /// Mirrors `Command.addCommandGroup(CommandGroup<C>)`.
-    pub fn add_command_group(&mut self, group: CommandGroup) {
-        self.positional.push(RefCell::new(Box::new(group)));
+    pub fn add_command_group(&mut self, group: CommandGroup) -> Rc<RefCell<Box<dyn AnyOptionValue>>> {
+        let boxed: Box<dyn AnyOptionValue> = Box::new(group);
+        let rc: Rc<RefCell<Box<dyn AnyOptionValue>>> = Rc::new(RefCell::new(boxed));
+        self.positional.push(Rc::clone(&rc));
+        rc
     }
 
     pub fn get_name(&self) -> &str {
@@ -143,7 +160,14 @@ impl Command {
             }
             let arg = &args[index];
             if arg == HELP {
-                return Err(Box::new(HelpRequestedException::new(self.name.clone())));
+                return Err(Box::new(HelpRequestedException::new(
+                    Rc::new(RefCell::new(Command {
+                        named: BTreeEconomicMap::create(),
+                        positional: Vec::new(),
+                        name: self.name.clone(),
+                        description: self.description.clone(),
+                    })),
+                )));
             }
             if arg == SEPARATOR {
                 index += 1;
@@ -222,10 +246,7 @@ impl Command {
                 if value.as_any().downcast_ref::<ListValue>().is_some() {
                     // Find the positional index of this cell
                     if let Some(idx) = self.positional.iter().position(|p| {
-                        std::ptr::eq(
-                            p.as_ptr() as *const _,
-                            cell as *const RefCell<Box<dyn AnyOptionValue>>,
-                        )
+                        Rc::ptr_eq(p, cell)
                     }) {
                         current_list_value_idx = Some(idx);
                     }
@@ -291,25 +312,25 @@ impl Command {
     }
 
     /// Collect any options in the current command and any nested subcommands
-    /// into two flattened lists.
+    /// into two flattened lists of OptionValue references.
     /// Mirrors `Command.collectOptions(List, List)`.
     pub(crate) fn collect_options(
         &self,
-        out_positional: &mut Vec<String>,
-        out_named: &mut Vec<Pair<String, String>>,
+        out_positional: &mut Vec<Rc<RefCell<Box<dyn AnyOptionValue>>>>,
+        out_named: &mut Vec<Pair<String, Rc<RefCell<Box<dyn AnyOptionValue>>>>>,
     ) {
         for option in &self.positional {
             let opt = option.borrow();
             if let Some(cg) = opt.as_any().downcast_ref::<CommandGroup>() {
                 if cg.is_set() {
-                    if let Some(selected) = cg.get_selected_command() {
-                        selected.collect_options(out_positional, out_named);
+                    if let Some(selected) = cg.get_selected_command_rc() {
+                        selected.borrow().collect_options(out_positional, out_named);
                     }
                 } else {
-                    out_positional.push(opt.get_name().to_string());
+                    out_positional.push(Rc::clone(option));
                 }
             } else {
-                out_positional.push(opt.get_name().to_string());
+                out_positional.push(Rc::clone(option));
             }
         }
         let mut cursor = self.named.get_entries();
@@ -317,10 +338,9 @@ impl Command {
             let key = cursor.get_key();
             let value = cursor.get_value();
             if let Some(v) = value {
-                let v = v.borrow();
                 out_named.push(Pair::create(
                     Some(key.clone()),
-                    Some(v.get_name().to_string()),
+                    Some(Rc::clone(v)),
                 ));
             }
         }

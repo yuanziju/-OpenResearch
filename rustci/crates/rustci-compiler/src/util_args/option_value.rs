@@ -34,6 +34,7 @@ use std::any::Any;
 use std::fmt;
 
 use crate::util_args::invalid_argument_exception::InvalidArgumentException;
+use crate::util_args::list_value::ListValue;
 
 /// Indentation string used for help output. Mirrors `OptionValue.INDENT`.
 pub const INDENT: &str = "  ";
@@ -101,6 +102,35 @@ pub trait AnyOptionValue: Any {
     /// `ListValue`).
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
+
+    /// Converts an option that will parse a single argument into one that will
+    /// parse successive occurrences of the same option into a list.
+    /// Mirrors `OptionValue.repeated()`.
+    fn repeated(&self) -> ListValue {
+        // In Java, this creates a new ListValue with the inner option being `this`.
+        // Since we can't clone Box<dyn AnyOptionValue>, we use a simpler approach:
+        // we create a new inner option of the same type and copy the state.
+        // This is a best-effort implementation that mirrors the Java behavior.
+        let name = self.get_name().to_string();
+        let description = self.get_description().to_string();
+        let inner = self.clone_inner();
+        ListValue::new(name, description, inner)
+    }
+
+    /// Clone-like helper to create a new inner option for repeated().
+    /// Default implementation creates a simple StringValue as a fallback.
+    fn clone_inner(&self) -> Box<dyn AnyOptionValue> {
+        let name = self.get_name().to_string();
+        let description = self.get_description().to_string();
+        Box::new(crate::util_args::string_value::StringValue::new(name, description))
+    }
+
+    /// Returns the parsed value as a type-erased `Box<dyn Any>`.
+    /// Mirrors accessing `OptionValue.value` field in Java.
+    /// Used by `ListValue` to collect parsed values from the inner option.
+    fn get_parsed_value(&self) -> Option<Box<dyn Any>> {
+        None
+    }
 }
 
 /// Creates a default usage string for an option: `[name]` for optional,

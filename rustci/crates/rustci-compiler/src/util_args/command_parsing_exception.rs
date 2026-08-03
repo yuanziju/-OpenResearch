@@ -25,27 +25,30 @@
 
 // SPDX-License-Identifier: GPL-2.0-with-classpath-exception
 
+use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
+use std::rc::Rc;
+
+use crate::util_args::command::Command;
 
 /// Wraps an exception thrown during parsing of a command.
 /// Mirrors `jdk.graal.compiler.util.args.CommandParsingException`.
-#[derive(Debug)]
 pub struct CommandParsingException {
     message: String,
-    command_name: String,
+    command: Rc<RefCell<Command>>,
 }
 
 impl CommandParsingException {
-    pub(crate) fn new(cause: &dyn Error, command_name: String) -> Self {
+    pub(crate) fn new(cause: &dyn Error, command: Rc<RefCell<Command>>) -> Self {
         CommandParsingException {
             message: format!("Argument parsing error: {}", cause),
-            command_name,
+            command,
         }
     }
 
-    pub fn get_command_name(&self) -> &str {
-        &self.command_name
+    pub fn get_command(&self) -> Rc<RefCell<Command>> {
+        Rc::clone(&self.command)
     }
 }
 
@@ -58,5 +61,13 @@ impl fmt::Display for CommandParsingException {
 impl Error for CommandParsingException {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         None
+    }
+}
+
+impl std::fmt::Debug for CommandParsingException {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CommandParsingException")
+            .field("message", &self.message)
+            .finish()
     }
 }

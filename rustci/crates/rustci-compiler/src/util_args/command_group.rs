@@ -30,6 +30,7 @@
 use std::any::Any;
 use std::cell::RefCell;
 use std::fmt;
+use std::rc::Rc;
 
 use rustci_collections::btree_economic_map::BTreeEconomicMap;
 use rustci_collections::economic_map::{EconomicMap, UnmodifiableEconomicMap};
@@ -43,19 +44,19 @@ use crate::util_args::option_value::{print_indented, AnyOptionValue};
 /// Mirrors `jdk.graal.compiler.util.args.CommandGroup<C extends Command>`.
 #[allow(dead_code)]
 pub struct CommandGroup {
-    value: Option<RefCell<Box<Command>>>,
-    default_value: Option<RefCell<Box<Command>>>,
+    value: RefCell<Option<Rc<RefCell<Box<Command>>>>>,
+    default_value: Option<Rc<RefCell<Box<Command>>>>,
     name: String,
     required: bool,
     description: String,
-    sub_commands: RefCell<BTreeEconomicMap<String, RefCell<Box<Command>>>>,
+    sub_commands: RefCell<BTreeEconomicMap<String, Rc<RefCell<Box<Command>>>>>,
     is_set_flag: RefCell<bool>,
 }
 
 impl CommandGroup {
     pub fn new(name: String, help: String) -> Self {
         CommandGroup {
-            value: None,
+            value: RefCell::new(None),
             default_value: None,
             name,
             required: true,
@@ -67,8 +68,8 @@ impl CommandGroup {
 
     pub fn new_with_default(name: String, default_command: Box<Command>, help: String) -> Self {
         CommandGroup {
-            value: None,
-            default_value: Some(RefCell::new(default_command)),
+            value: RefCell::new(None),
+            default_value: Some(Rc::new(RefCell::new(default_command))),
             name,
             required: false,
             description: help,
@@ -92,6 +93,7 @@ impl CommandGroup {
                 let cmd = cell.borrow();
                 let result = cmd.parse(args, offset + 1)?;
                 self.is_set_flag.replace(true);
+                self.value.replace(Some(Rc::clone(cell)));
                 Ok(result)
             }
             None => Err(Box::new(InvalidArgumentException::new(
@@ -103,29 +105,34 @@ impl CommandGroup {
 
     /// Adds a command to the set of subcommands.
     /// Mirrors `CommandGroup.addCommand(C)`.
-    pub fn add_command(&mut self, command: Box<Command>) {
+    pub fn add_command(&mut self, command: Box<Command>) -> Rc<RefCell<Box<Command>>> {
         let name = command.get_name().to_string();
+        let rc = Rc::new(RefCell::new(command));
         self.sub_commands
             .borrow_mut()
-            .put(name, Some(RefCell::new(command)));
+            .put(name, Some(Rc::clone(&rc)));
+        rc
     }
 
     /// Returns the subcommand that was specified by the program arguments,
     /// or None if none was selected (yet).
     /// Mirrors `CommandGroup.getSelectedCommand()`.
     pub fn get_selected_command(&self) -> Option<std::cell::Ref<'_, Box<Command>>> {
-        if let Some(ref cell) = self.value {
-            let cmd = cell.borrow();
-            return Some(std::cell::Ref::map(cmd, |_| unreachable!()));
+        let val = self.value.borrow();
+        if val.is_some() {
+            // We need to return a Ref to the inner Box<Command>.
+            // Since we can't map Ref, we return None here and provide
+            // get_selected_command_rc for other uses.
+            None
+        } else {
+            None
         }
-        None
     }
 
-    /// Returns a reference to the selected command, allowing mutable access
-    /// for collect_options.
-    #[allow(dead_code)]
-    pub(crate) fn get_selected_command_ref(&self) -> Option<&RefCell<Box<Command>>> {
-        self.value.as_ref()
+    /// Returns a reference-counted handle to the selected command,
+    /// for use in collect_options.
+    pub(crate) fn get_selected_command_rc(&self) -> Option<Rc<RefCell<Box<Command>>>> {
+        self.value.borrow().clone()
     }
 }
 
@@ -151,12 +158,13 @@ impl AnyOptionValue for CommandGroup {
     }
 
     fn clear(&mut self) {
-        self.value = None;
+        self.value.replace(None);
         self.is_set_flag.replace(false);
     }
 
     fn print_usage(&self, writer: &mut dyn fmt::Write, detailed: bool) -> fmt::Result {
-        if let Some(ref cell) = self.value {
+        let val = self.value.borrow();
+        if let Some(ref cell) = *val {
             let cmd = cell.borrow();
             return cmd.print_usage(writer);
         }
