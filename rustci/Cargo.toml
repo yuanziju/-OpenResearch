@@ -5,6 +5,7 @@ members = [
     "crates/rustci-util-json",
     "crates/rustci-vm-ci",
     "crates/rustci-bridge",
+    "crates/rustci-compiler",
 ]
 
 [workspace.package]

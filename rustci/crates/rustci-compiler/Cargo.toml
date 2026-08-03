@@ -1,0 +1,13 @@
+[package]
+name = "rustci-compiler"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Rust 移植 jdk.graal.compiler.util.args（16 类，完整移植）"
+
+[dependencies]
+rustci-collections = { path = "../rustci-collections" }
+
+[lib]
+name = "rustci_compiler"
+path = "src/lib.rs"
