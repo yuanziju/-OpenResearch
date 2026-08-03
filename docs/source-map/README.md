@@ -33,7 +33,7 @@
 |---|---|---|---|---|---|
 | 1 | jdk.vm.ci.meta | 7178 | 7239 | 已完成 | [jdk-vm-ci-meta.md](jdk-vm-ci-meta.md) |
 | 2 | jdk.vm.ci.code | — | — | 未开始 | [jdk-vm-ci-code.md](jdk-vm-ci-code.md) |
-| 3 | jdk.vm.ci.runtime | — | — | 未开始 | [jdk-vm-ci-runtime.md](jdk-vm-ci-runtime.md) |
+| 3 | jdk.vm.ci.runtime | 340 | 491 | 已完成 | [jdk-vm-ci-runtime.md](jdk-vm-ci-runtime.md) |
 | 4 | jdk.vm.ci.hotspot | — | — | 未开始 | [jdk-vm-ci-hotspot.md](jdk-vm-ci-hotspot.md) |
 | 5 | jdk.vm.ci.services | — | — | 未开始 | [jdk-vm-ci-services.md](jdk-vm-ci-services.md) |
 
