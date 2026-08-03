@@ -94,7 +94,7 @@
 | # | 模块 | 源 LoC | Rust LoC | 状态 | MD 文件 |
 |---|---|---|---|---|---|
 | 33 | jdk.graal.compiler.libgraal | — | — | 未开始 | [jdk-graal-compiler-libgraal.md](jdk-graal-compiler-libgraal.md) |
-| 34 | rustci-bridge（Rust cdylib 对接层，7 符号） | — | — | 未开始 | [rustci-bridge.md](rustci-bridge.md) |
+| 34 | rustci-bridge（Rust cdylib 对接层，7 符号） | — | 363 | 已完成 | [rustci-bridge.md](rustci-bridge.md) |
 
 ---
 
