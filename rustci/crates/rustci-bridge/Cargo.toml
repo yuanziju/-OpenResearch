@@ -3,7 +3,7 @@ name = "rustci-bridge"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Rust cdylib 桥接层，导出 7 个 JNI 符号供 HotSpot 链接"
+description = "Rust cdylib 桥接层，导出 8 个 JNI 符号供 HotSpot 链接"
 
 [dependencies]
 rustci-vm-ci = { path = "../rustci-vm-ci" }

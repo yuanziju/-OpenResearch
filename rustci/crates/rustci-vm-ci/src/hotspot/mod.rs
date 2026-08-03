@@ -40,6 +40,7 @@ pub mod hotspot_installed_code;
 pub mod hotspot_jvmci_runtime;
 pub mod hotspot_memory_access_provider;
 pub mod hotspot_meta_access_provider;
+pub mod hotspot_method_wrapper;
 pub mod hotspot_nmethod;
 pub mod hotspot_resolved_java_method;
 pub mod hotspot_resolved_java_method_impl;

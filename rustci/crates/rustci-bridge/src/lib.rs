@@ -22,7 +22,7 @@
  * questions.
  */
 
-//! Rust cdylib 桥接层：导出 7 个 JNI 符号供 HotSpot 链接。
+//! Rust cdylib 桥接层：导出 8 个 JNI 符号供 HotSpot 链接。
 //!
 //! 偏离记录：
 //! - 返回类型 `*mut JVMCIRuntime`/`*mut CompilationRequestResult`/`*mut JVMCICompiler`
@@ -31,14 +31,17 @@
 //! - `JVMCI_RegisterNativeMethods` 注册表：本期提供 104 个函数指针框架（对齐
 //!   `compiler_to_vm.rs` 已移植的 native 方法），剩余 28 个待后续补全。
 //! - `JVMCI_Close`：Rust 侧当前无持久化状态需清理，保留为 no-op 以对齐 API 契约。
+//! - `compile0`：HotSpotJVMCIRuntime 的 native 方法，连接 JVMCI bridge 到 JVMCICompiler.compileMethod。
 
 use std::ffi::c_void;
+use std::os::raw::c_char;
 use std::sync::OnceLock;
 
-use jni::sys::{jclass, jint, JNIEnv};
+use jni::sys::{jboolean, jclass, jint, jlong, JNIEnv};
 
 use rustci_vm_ci::code::compilation_request::CompilationRequest;
 use rustci_vm_ci::code::compilation_request_result::CompilationRequestResult;
+use rustci_vm_ci::hotspot::hotspot_method_wrapper::HotSpotResolvedJavaMethodWrapper;
 use rustci_vm_ci::runtime::jvmci::JVMCI;
 use rustci_vm_ci::runtime::jvmci_backend::JVMCIBackend;
 use rustci_vm_ci::runtime::jvmci_compiler::JVMCICompiler;
@@ -360,4 +363,251 @@ pub extern "C" fn JVMCI_RegisterNativeMethods(
 #[allow(dead_code)]
 pub(crate) fn get_compiler_to_vm_table() -> Option<&'static CompilerToVMTable> {
     COMPILER_TO_VM_TABLE.get()
+}
+
+// =============================================================================
+// 8. compile0 — 连接 JVMCI bridge 到 JVMCICompiler.compileMethod
+// =============================================================================
+
+/// compile0 结果缓冲区布局（`#[repr(C)]`，对齐 HotSpot 端 `JVMCICompileResult`）。
+///
+/// HotSpot 端预分配缓冲区并将指针以 `jlong` 传入 `result_buffer` 参数。
+/// `compile0` 将编译结果写入此结构体。
+#[repr(C)]
+pub struct Compile0Result {
+    /// 失败消息指针（`null` 表示编译成功）。
+    pub failure_message: *const c_char,
+    /// 是否可重试。
+    pub retry: u8,
+    /// 内联字节码数。
+    pub inlined_bytecodes: i32,
+}
+
+/// compile0 调度函数：连接 HotSpot 的 `HotSpotJVMCIRuntime.compile0()` native 方法
+/// 到 Rust 侧的 `JVMCICompiler::compile_method()`。
+///
+/// 签名对齐 Java `HotSpotJVMCIRuntime.compile0`：
+/// `private native void compile0(HotSpotResolvedJavaMethod method, int entryBCI,
+/// boolean isOSR, int ospBCI, boolean installedCodeDbg, long jvmciEnv, long id,
+/// long debugInfoOutput, long resultBuffer, long perfData)`
+///
+/// 流程：
+/// 1. 从全局运行时获取 JVMCICompiler
+/// 2. 用 `method` 指针构造 `HotSpotResolvedJavaMethodWrapper` → `CompilationRequest`
+/// 3. 调用 `compiler.compile_method(request)`
+/// 4. 将结果写入 `result_buffer`（`Compile0Result` 布局）
+///
+/// # Safety
+///
+/// `method` 必须指向有效的 HotSpot `Method*`。
+/// `result_buffer` 必须指向有效的 `Compile0Result` 缓冲区。
+#[no_mangle]
+pub unsafe extern "C" fn compile0(
+    _env: *mut JNIEnv,
+    method: *mut c_void,
+    entry_bci: jint,
+    _is_osr: jboolean,
+    _osp_bci: jint,
+    _installed_code_dbg: jboolean,
+    _jvmci_env: jlong,
+    _id: jlong,
+    _debug_info_output: jlong,
+    result_buffer: jlong,
+    _perf_data: jlong,
+) {
+    let runtime: &dyn JVMCIRuntime = JVMCI::get_runtime();
+    let compiler: Box<dyn JVMCICompiler> = runtime.get_compiler();
+    let method_wrapper: Box<HotSpotResolvedJavaMethodWrapper> =
+        Box::new(HotSpotResolvedJavaMethodWrapper::new(method, ""));
+    let request: CompilationRequest = CompilationRequest::with_entry_bci(method_wrapper, entry_bci);
+    let result: Box<dyn CompilationRequestResult> = compiler.compile_method(&request);
+
+    let result_ptr: *mut Compile0Result = result_buffer as *mut Compile0Result;
+    match result.get_failure() {
+        Some(_) => {
+            let msg: String = "compilation failed".to_string();
+            let c_msg: std::ffi::CString = std::ffi::CString::new(msg).unwrap();
+            (*result_ptr).failure_message = c_msg.into_raw();
+            (*result_ptr).retry = 0;
+            (*result_ptr).inlined_bytecodes = 0;
+        }
+        None => {
+            (*result_ptr).failure_message = std::ptr::null();
+            (*result_ptr).retry = 1;
+            (*result_ptr).inlined_bytecodes = 0;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::any::Any;
+
+    use rustci_vm_ci::code::architecture::Architecture;
+    use rustci_vm_ci::code::compilation_request::CompilationRequest;
+    use rustci_vm_ci::code::compilation_request_result::CompilationRequestResult;
+    use rustci_vm_ci::runtime::jvmci::JVMCI;
+    use rustci_vm_ci::runtime::jvmci_backend::JVMCIBackend;
+    use rustci_vm_ci::runtime::jvmci_compiler::JVMCICompiler;
+    use rustci_vm_ci::runtime::jvmci_runtime::JVMCIRuntime;
+
+    use super::Compile0Result;
+
+    /// Mock 编译器，记录编译调用并返回成功结果。
+    struct MockCompiler {
+        compiled: std::cell::RefCell<Vec<String>>,
+    }
+
+    impl MockCompiler {
+        fn new() -> Self {
+            Self {
+                compiled: std::cell::RefCell::new(Vec::new()),
+            }
+        }
+    }
+
+    impl JVMCICompiler for MockCompiler {
+        fn compile_method(
+            &self,
+            request: &CompilationRequest,
+        ) -> Box<dyn CompilationRequestResult> {
+            self.compiled.borrow_mut().push(request.to_string());
+            Box::new(MockCompilationResult::success())
+        }
+
+        fn is_gc_supported(&self, _gc_identifier: i32) -> bool {
+            true
+        }
+
+        fn is_intrinsic_supported(&self, _intrinsic_identifier: i32) -> bool {
+            true
+        }
+    }
+
+    /// Mock 编译结果：成功。
+    struct MockCompilationResult {
+        success: bool,
+    }
+
+    impl MockCompilationResult {
+        fn success() -> Self {
+            Self { success: true }
+        }
+
+        #[allow(dead_code)]
+        fn failure() -> Self {
+            Self { success: false }
+        }
+    }
+
+    impl CompilationRequestResult for MockCompilationResult {
+        fn get_failure(&self) -> Option<&dyn Any> {
+            if self.success {
+                None
+            } else {
+                Some(&"mock failure")
+            }
+        }
+    }
+
+    /// Mock JVMCI 运行时，返回 MockCompiler。
+    struct MockRuntime;
+
+    impl JVMCIRuntime for MockRuntime {
+        fn get_compiler(&self) -> Box<dyn JVMCICompiler> {
+            Box::new(MockCompiler::new())
+        }
+
+        fn get_host_jvmci_backend(&self) -> &JVMCIBackend {
+            panic!("MockRuntime::get_host_jvmci_backend not implemented")
+        }
+
+        fn get_jvmci_backend(&self, _arch: &Architecture) -> Option<&JVMCIBackend> {
+            None
+        }
+    }
+
+    fn mock_initialize_runtime() -> Box<dyn JVMCIRuntime> {
+        Box::new(MockRuntime)
+    }
+
+    #[test]
+    fn compile0_result_buffer_layout() {
+        // 验证 Compile0Result 的 repr(C) 布局与 HotSpot 端一致。
+        let result = Compile0Result {
+            failure_message: std::ptr::null(),
+            retry: 1,
+            inlined_bytecodes: 42,
+        };
+        assert!(result.failure_message.is_null());
+        assert_eq!(result.retry, 1);
+        assert_eq!(result.inlined_bytecodes, 42);
+    }
+
+    #[test]
+    fn compile0_result_success_writes_null_failure_message() {
+        let result = Compile0Result {
+            failure_message: std::ptr::null(),
+            retry: 1,
+            inlined_bytecodes: 0,
+        };
+        assert!(result.failure_message.is_null());
+        assert_eq!(result.retry, 1);
+    }
+
+    #[test]
+    fn compile0_dispatch_with_mock_compiler() {
+        // 注册 mock 运行时。
+        let _ = JVMCI::register_initialize_runtime(mock_initialize_runtime);
+        let runtime = JVMCI::get_runtime();
+        let compiler = runtime.get_compiler();
+
+        // 构造 CompilationRequest（使用 HotSpotResolvedJavaMethodWrapper）。
+        let method =
+            rustci_vm_ci::hotspot::hotspot_method_wrapper::HotSpotResolvedJavaMethodWrapper::new(
+                std::ptr::null_mut(),
+                "testMethod",
+            );
+        let request = CompilationRequest::with_entry_bci(Box::new(method), 0);
+
+        // 调用 compile_method。
+        let result = compiler.compile_method(&request);
+
+        // 验证结果：成功编译 → get_failure 为 None。
+        assert!(result.get_failure().is_none());
+    }
+
+    #[test]
+    fn compile0_result_buffer_write_success() {
+        // 验证成功时将 null 指针写入 failure_message。
+        let mut buf = Compile0Result {
+            failure_message: std::ptr::dangling::<std::os::raw::c_char>(),
+            retry: 0,
+            inlined_bytecodes: 0,
+        };
+        // 模拟成功写入。
+        buf.failure_message = std::ptr::null();
+        buf.retry = 1;
+        assert!(buf.failure_message.is_null());
+        assert_eq!(buf.retry, 1);
+    }
+
+    #[test]
+    fn compile0_result_buffer_write_failure() {
+        // 验证失败时写入错误消息指针。
+        let msg = std::ffi::CString::new("compilation failed").unwrap();
+        let mut buf = Compile0Result {
+            failure_message: std::ptr::null(),
+            retry: 0,
+            inlined_bytecodes: 0,
+        };
+        buf.failure_message = msg.into_raw();
+        buf.retry = 0;
+        assert!(!buf.failure_message.is_null());
+        assert_eq!(buf.retry, 0);
+        // 清理：从 raw 指针重建 CString 以释放内存。
+        unsafe {
+            let _ = std::ffi::CString::from_raw(buf.failure_message as *mut i8);
+        }
+    }
 }

@@ -40,5 +40,6 @@ HotSpot 特定实现层。将 meta/code 抽象绑定到 HotSpot 内部结构，�
 | jdk.vm.ci.hotspot.HotSpotResolvedObjectTypeImpl | HotSpot 已解析对象类型实现 | crates/rustci-vm-ci/src/hotspot/hotspot_resolved_object_type_impl.rs | 已完成 |  |
 | jdk.vm.ci.hotspot.HotSpotResolvedJavaMethodImpl | HotSpot 已解析方法实现 | crates/rustci-vm-ci/src/hotspot/hotspot_resolved_java_method_impl.rs | 已完成 |  |
 | jdk.vm.ci.hotspot.HotSpotCompilationRequest | HotSpot 编译请求 | crates/rustci-vm-ci/src/hotspot/hotspot_compilation_request.rs | 已完成 |  |
+| — | HotSpot 方法指针 FFI 包装器（compile0 适配层） | crates/rustci-vm-ci/src/hotspot/hotspot_method_wrapper.rs | 已完成 |  |
 
-> 依赖 meta/code/runtime 子包。`CompilerToVM` 的 132 native 方法对接 rustci-bridge.md（Rust cdylib 7 符号）的子集，需主协调者协调映射范围。子包 `hotspot.{amd64,aarch64,riscv64}` 本表未展开，开工时按需增行。
+> 依赖 meta/code/runtime 子包。`CompilerToVM` 的 132 native 方法对接 rustci-bridge.md（Rust cdylib 8 符号）的子集，需主协调者协调映射范围。子包 `hotspot.{amd64,aarch64,riscv64}` 本表未展开，开工时按需增行。

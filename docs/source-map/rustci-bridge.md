@@ -1,12 +1,12 @@
 # rustci-bridge（Rust cdylib 对接层）
 
-## 源位置：无 Java 源；Rust 原生 cdylib（产物 `librustci_bridge.so`），导出 **7 个 C ABI 符号** 供 HotSpot/宿主 JNI 调用。参考 `jdk.vm.ci.hotspot.CompilerToVM`（132 native）的对接需求。
+## 源位置：无 Java 源；Rust 原生 cdylib（产物 `librustci_bridge.so`），导出 **8 个 C ABI 符号** 供 HotSpot/宿主 JNI 调用。参考 `jdk.vm.ci.hotspot.CompilerToVM`（132 native）的对接需求。
 
 ## 状态：已完成
 
 ## 说明
 
-RustCI 与宿主 VM 的桥接层：将 Rust 实现的 JVMCI/Graal 子集以 cdylib 形式暴露给 HotSpot，承接 `CompilerToVM` 等 native 入口。7 个 JNI 导出符号 + 104 字段 CompilerToVM 注册表框架已实现。
+RustCI 与宿主 VM 的桥接层：将 Rust 实现的 JVMCI/Graal 子集以 cdylib 形式暴露给 HotSpot，承接 `CompilerToVM` 等 native 入口。8 个 JNI 导出符号 + 104 字段 CompilerToVM 注册表框架已实现。
 
 ## 偏离记录
 
@@ -15,6 +15,7 @@ RustCI 与宿主 VM 的桥接层：将 Rust 实现的 JVMCI/Graal 子集以 cdyl
 - `JVMCI_RegisterNativeMethods` 注册表：本期提供 104 个函数指针框架（对齐 `compiler_to_vm.rs` 已移植的 native 方法），剩余 28 个待后续补全。
 - `JVMCI_Close`：Rust 侧当前无持久化状态需清理，保留为 no-op 以对齐 API 契约。
 - `JVMCI_CompileMethod`/`JVMCI_GetCompiler`/`JVMCI_GetHostBackend` 标记为 `unsafe extern "C"`（解引用原始指针，调用方确保指针有效性）。
+- `compile0`：HotSpotJVMCIRuntime 的私有 native 方法，连接 JVMCI bridge 到 `JVMCICompiler::compile_method()`。`method` 参数（`*mut c_void`）通过 `HotSpotResolvedJavaMethodWrapper` 包装为 `Box<dyn ResolvedJavaMethod>`。`result_buffer` 参数（`jlong`）指向 `Compile0Result`（`#[repr(C)]` 结构体，对齐 HotSpot 端 `JVMCICompileResult` 布局）。
 
 ## 映射表
 
@@ -27,3 +28,4 @@ RustCI 与宿主 VM 的桥接层：将 Rust 实现的 JVMCI/Graal 子集以 cdyl
 | JVMCI_GetCompiler | JVMCIRuntime::getCompiler() | crates/rustci-bridge/src/lib.rs | 已完成 | — |
 | JVMCI_GetHostBackend | JVMCIRuntime::getHostJVMCIBackend() | crates/rustci-bridge/src/lib.rs | 已完成 | — |
 | JVMCI_RegisterNativeMethods | CompilerToVM::registerNativeMethods(Class<?>) | crates/rustci-bridge/src/lib.rs | 已完成 | — |
+| compile0 | HotSpotJVMCIRuntime::compile0(method, entryBCI, ...) | crates/rustci-bridge/src/lib.rs | 已完成 | — |
