@@ -352,7 +352,7 @@ impl ValueBuilder {
         let writer = self.state.writer.clone();
         let active_id = self.state.active_id.clone();
         let next_id = self.state.next_id.clone();
-        let parent_id = self.state.id;
+        let parent_id = self.state.parent_id;
         self.state.closed.set(true);
         ObjectBuilder::new(writer, active_id, next_id, parent_id)
     }
@@ -363,7 +363,7 @@ impl ValueBuilder {
         let writer = self.state.writer.clone();
         let active_id = self.state.active_id.clone();
         let next_id = self.state.next_id.clone();
-        let parent_id = self.state.id;
+        let parent_id = self.state.parent_id;
         self.state.closed.set(true);
         ArrayBuilder::new(writer, active_id, next_id, parent_id)
     }
@@ -401,8 +401,16 @@ impl ValueBuilder {
 
 impl Drop for ValueBuilder {
     fn drop(&mut self) {
-        if !self.state.closed.get() && self.wrote_something {
-            let _ = self.state.finish();
+        if !self.state.closed.get() {
+            if self.wrote_something {
+                let _ = self.state.finish();
+            } else {
+                // Release the active_id back to the parent so that the
+                // parent builder can continue after this ValueBuilder is
+                // discarded (e.g., when append_key() is called and the
+                // returned ValueBuilder is not used).
+                self.state.active_id.set(self.state.parent_id);
+            }
         }
     }
 }

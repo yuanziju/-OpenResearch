@@ -47,6 +47,9 @@ use std::io;
 
 use crate::json_printable::JsonPrintable;
 use crate::json_printer::JsonPrinter;
+use crate::json_value::{JsonNumber, JsonValue};
+use crate::json_writer_trait::JsonWriter as JsonWriterTrait;
+use rustci_collections::UnmodifiableEconomicMap;
 
 // ---------------------------------------------------------------------------
 // JsonWrite trait — the polymorphic interface that both `JsonWriter` and
@@ -259,5 +262,106 @@ impl JsonWrite for JsonWriter {
 
     fn end_array(&mut self) -> io::Result<()> {
         self.raw_emit_char(']')
+    }
+}
+
+impl JsonWriterTrait for JsonWriter {
+    fn append_object_start(&mut self) -> io::Result<()> {
+        self.raw_emit_char('{')
+    }
+
+    fn append_object_end(&mut self) -> io::Result<()> {
+        self.raw_emit_char('}')
+    }
+
+    fn append_array_start(&mut self) -> io::Result<()> {
+        self.raw_emit_char('[')
+    }
+
+    fn append_array_end(&mut self) -> io::Result<()> {
+        self.raw_emit_char(']')
+    }
+
+    fn append_separator(&mut self) -> io::Result<()> {
+        self.raw_emit_char(',')
+    }
+
+    fn append_field_separator(&mut self) -> io::Result<()> {
+        self.raw_emit_char(':')
+    }
+
+    fn print(&mut self, value: &JsonValue) -> io::Result<()> {
+        match value {
+            JsonValue::Null => self.raw_emit_str("null"),
+            JsonValue::Bool(true) => self.raw_emit_str("true"),
+            JsonValue::Bool(false) => self.raw_emit_str("false"),
+            JsonValue::String(s) => JsonWrite::quote(self, s),
+            JsonValue::Number(n) => match n {
+                JsonNumber::Int(i) => self.raw_emit_str(&i.to_string()),
+                JsonNumber::Long(l) => self.raw_emit_str(&l.to_string()),
+                JsonNumber::Double(d) => {
+                    if d.is_nan() || d.is_infinite() {
+                        self.raw_emit_str("null")
+                    } else {
+                        self.raw_emit_str(&d.to_string())
+                    }
+                }
+            },
+            JsonValue::Array(arr) => {
+                self.append_array_start()?;
+                let mut first = true;
+                for v in arr {
+                    if !first {
+                        self.append_separator()?;
+                    }
+                    first = false;
+                    self.print(v)?;
+                }
+                self.append_array_end()
+            }
+            JsonValue::Object(map) => {
+                self.append_object_start()?;
+                let mut cursor = map.get_entries();
+                let mut first = true;
+                while cursor.advance() {
+                    if !first {
+                        self.append_separator()?;
+                    }
+                    first = false;
+                    JsonWrite::quote(self, cursor.get_key())?;
+                    self.append_field_separator()?;
+                    if let Some(v) = cursor.get_value() {
+                        self.print(v)?;
+                    } else {
+                        self.raw_emit_str("null")?;
+                    }
+                }
+                self.append_object_end()
+            }
+        }
+    }
+
+    fn append_raw(&mut self, data: &[u8]) -> io::Result<()> {
+        self.out.write_all(data)
+    }
+
+    fn append_quoted_string(&mut self, s: &str) -> io::Result<()> {
+        for c in s.chars() {
+            match c {
+                '"' => self.raw_emit_str("\\\"")?,
+                '\\' => self.raw_emit_str("\\\\")?,
+                '\x08' => self.raw_emit_str("\\b")?,
+                '\x0c' => self.raw_emit_str("\\f")?,
+                '\n' => self.raw_emit_str("\\n")?,
+                '\r' => self.raw_emit_str("\\r")?,
+                '\t' => self.raw_emit_str("\\t")?,
+                c if c < ' ' => {
+                    let escaped = format!("\\u{:04x}", c as u32);
+                    self.raw_emit_str(&escaped)?;
+                }
+                c => self.raw_emit_char(c)?,
+            }
+        }
+        Ok(())
     }
 }
