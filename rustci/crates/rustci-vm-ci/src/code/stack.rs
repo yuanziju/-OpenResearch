@@ -34,7 +34,7 @@
 //!   Rust `Option<T>`（`None`=继续，`Some`=停止），对齐 Java null 语义。
 //! - `StackIntrospection.iterateFrames<T>`：Java `<T> T iterateFrames(...)` 泛型方法 → Rust 泛型方法
 //!   + `where Self: Sized` 约束（与 `meta::Value::get_value_kind_as` 一致），使 trait 保持 dyn 兼容。
-//!   `initialMethods`/`matchingMethods` 的 `ResolvedJavaMethod[]`（引用数组）→ `&[&dyn ResolvedJavaMethod]`。
+//!     `initialMethods`/`matchingMethods` 的 `ResolvedJavaMethod[]`（引用数组）→ `&[&dyn ResolvedJavaMethod]`。
 
 use std::any::Any;
 

@@ -117,7 +117,7 @@ impl<T: AbstractProfiledItem<U>, U: ?Sized> AbstractJavaProfile<T, U> {
         };
         debug_assert!(me.is_sorted());
         let total = me.total_probability();
-        debug_assert!(total >= 0.0 && total <= 1.0001, "{} {}", total, "ok");
+        debug_assert!((0.0..=1.0001).contains(&total), "{} {}", total, "ok");
         me
     }
 
@@ -150,12 +150,7 @@ impl<T: AbstractProfiledItem<U>, U: ?Sized> AbstractJavaProfile<T, U> {
 
     /// 对应 `findEntry`：按 item 引用相等查找。
     pub fn find_entry(&self, type_: &U) -> Option<&T> {
-        for pt in &self.pitems {
-            if item_ptr_eq(pt.item(), type_) {
-                return Some(pt);
-            }
-        }
-        None
+        self.pitems.iter().find(|pt| item_ptr_eq(pt.item(), type_))
     }
 
     /// 对应 `AbstractJavaProfile.toString`。

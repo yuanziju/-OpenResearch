@@ -85,6 +85,7 @@ impl BytecodeFrame {
     /// 对应 `BytecodeFrame(BytecodeFrame caller, ResolvedJavaMethod method, int bci,
     /// boolean rethrowException, boolean duringCall, JavaValue[] values, JavaKind[] slotKinds,
     /// int numLocals, int numStack, int numLocks)`。
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         caller: Option<Box<BytecodeFrame>>,
         method: Box<dyn ResolvedJavaMethod>,
@@ -135,13 +136,13 @@ impl BytecodeFrame {
         }
         for i in 0..f.slot_kinds.len() {
             let kind = f.slot_kinds[i];
-            if kind.needs_two_slots() {
-                if i + 1 >= f.values.len() || !is_illegal_value(&*f.values[i + 1]) {
-                    panic!(
-                        "JVMCIError: 2 slot value at index {} not followed by Value.ILLEGAL",
-                        i
-                    );
-                }
+            if kind.needs_two_slots()
+                && (i + 1 >= f.values.len() || !is_illegal_value(&*f.values[i + 1]))
+            {
+                panic!(
+                    "JVMCIError: 2 slot value at index {} not followed by Value.ILLEGAL",
+                    i
+                );
             }
         }
         for i in f.slot_kinds.len()..f.values.len() {

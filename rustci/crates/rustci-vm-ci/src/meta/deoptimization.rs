@@ -39,10 +39,7 @@ pub enum DeoptimizationAction {
 
 impl DeoptimizationAction {
     pub fn does_invalidate_compilation(self) -> bool {
-        match self {
-            DeoptimizationAction::None => false,
-            _ => true,
-        }
+        !matches!(self, DeoptimizationAction::None)
     }
 }
 

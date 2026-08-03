@@ -60,10 +60,10 @@ pub trait Signature {
     fn to_method_descriptor(&self) -> String {
         let mut sb = String::from("(");
         for i in 0..self.get_parameter_count(false) {
-            sb.push_str(&self.get_parameter_type(i, None).get_name());
+            sb.push_str(self.get_parameter_type(i, None).get_name());
         }
         sb.push(')');
-        sb.push_str(&self.get_return_type(None).get_name());
+        sb.push_str(self.get_return_type(None).get_name());
         sb
     }
 

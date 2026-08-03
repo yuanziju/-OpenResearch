@@ -140,7 +140,7 @@ pub fn convert(value: i64, input_bits: i32, unsigned: bool) -> i64 {
 
 /// 对应 `static long mask(int bits)`。
 pub fn mask(bits: i32) -> i64 {
-    assert!(0 <= bits && bits <= 64);
+    assert!((0..=64).contains(&bits));
     if bits == 64 {
         -1i64
     } else {
@@ -214,19 +214,19 @@ pub fn tabulate_values(pos: &BytecodePosition) -> String {
 
 /// 对应 `static String tabulate(Object[] cells, int cols, int lpad, int rpad)`。
 pub fn tabulate(cells: &[String], cols: usize, lpad: usize, rpad: usize) -> String {
-    let rows = (cells.len() + cols - 1) / cols;
+    let rows = cells.len().div_ceil(cols);
     let mut col_widths = vec![0usize; cols];
-    for col in 0..cols {
+    for (col, col_width) in col_widths.iter_mut().enumerate().take(cols) {
         for row in 0..rows {
             let index = col + row * cols;
             if index < cells.len() {
-                col_widths[col] = col_widths[col].max(cells[index].len());
+                *col_width = (*col_width).max(cells[index].len());
             }
         }
     }
     let mut sb = String::new();
     for row in 0..rows {
-        for col in 0..cols {
+        for (col, col_width) in col_widths.iter().enumerate().take(cols) {
             let index = col + row * cols;
             if index < cells.len() {
                 for _ in 0..lpad {
@@ -235,7 +235,7 @@ pub fn tabulate(cells: &[String], cols: usize, lpad: usize, rpad: usize) -> Stri
                 let s = &cells[index];
                 sb.push_str(s);
                 let mut w = s.len();
-                while w < col_widths[col] {
+                while w < *col_width {
                     sb.push(' ');
                     w += 1;
                 }

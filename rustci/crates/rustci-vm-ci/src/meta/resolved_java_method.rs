@@ -206,7 +206,7 @@ impl Parameter {
         method: Box<dyn ResolvedJavaMethod>,
         index: i32,
     ) -> Self {
-        debug_assert!(name.as_ref().map_or(true, |n| !n.is_empty()));
+        debug_assert!(name.as_ref().is_none_or(|n| !n.is_empty()));
         Self {
             name,
             method,

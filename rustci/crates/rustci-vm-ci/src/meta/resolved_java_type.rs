@@ -269,14 +269,10 @@ pub trait ResolvedJavaType: JavaType + ModifiersProvider + Annotated {
         signature: &dyn Signature,
     ) -> Option<Box<dyn ResolvedJavaMethod>> {
         let target_descriptor = signature.to_method_descriptor();
-        for method in self.get_declared_methods() {
-            if method.get_name() == name
+        self.get_declared_methods().into_iter().find(|method| {
+            method.get_name() == name
                 && method.get_signature().to_method_descriptor() == target_descriptor
-            {
-                return Some(method);
-            }
-        }
-        None
+        })
     }
 
     /// 对应 `isCloneableWithAllocation()`。

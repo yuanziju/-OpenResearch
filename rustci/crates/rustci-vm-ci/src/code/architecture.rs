@@ -85,6 +85,7 @@ impl Architecture {
     ///
     /// 偏离：Java `protected` → Rust `pub`（Rust 无 `protected` 等价物；字段为私有，构造器公开
     /// 供其他 crate 的子类经 `ArchitectureSub` trait 注入使用）。
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: String,
         word_kind: Box<dyn PlatformKind>,

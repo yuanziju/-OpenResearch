@@ -79,7 +79,7 @@ impl RegisterAttributes {
                 caller_save: caller_save_registers.contains(reg),
                 callee_save: callee_save_registers
                     .as_ref()
-                    .map_or(false, |cs| cs.contains(reg)),
+                    .is_some_and(|cs| cs.contains(reg)),
                 allocatable: allocatable_registers.contains(reg),
             };
             map[reg.number as usize] = attr;

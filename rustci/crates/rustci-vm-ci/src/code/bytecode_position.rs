@@ -134,6 +134,7 @@ impl BytecodePosition {
     }
 
     /// 对应 `addCaller(BytecodePosition link)`：递归插入。取 `self` 所有权以复用 `method`。
+    #[allow(clippy::boxed_local)]
     pub fn add_caller(self: Box<Self>, link: Box<BytecodePosition>) -> Box<BytecodePosition> {
         match self.caller {
             None => Box::new(BytecodePosition::new(Some(link), self.method, self.bci)),
