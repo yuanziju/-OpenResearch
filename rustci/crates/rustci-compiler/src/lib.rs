@@ -31,6 +31,9 @@
 // StringValue, Flag), plus exception types.
 
 pub mod core;
+pub mod debug;
 pub mod graphio;
+pub mod lir;
 pub mod nodes;
+pub mod phases;
 pub mod util_args;

@@ -80,6 +80,9 @@ pub trait JavaConstant: Constant + JavaValue {
     /// Rust 增设：对应 Java `CallSiteTargetValue.equals` 中 `callSite.equals(other.callSite)`。
     /// 各实现按类型+值比对（对齐 `NullConstant.equals`/`PrimitiveConstant.equals`）。
     fn constant_equals(&self, other: &dyn JavaConstant) -> bool;
+
+    /// Rust 增设：深拷贝 JavaConstant trait 对象。各实现返回等值新 Box。
+    fn clone_box(&self) -> Box<dyn JavaConstant>;
 }
 
 /// 对应 `JavaConstant.isNull(Constant c)` 静态方法。

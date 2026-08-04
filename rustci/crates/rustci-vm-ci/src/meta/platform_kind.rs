@@ -69,4 +69,8 @@ pub trait PlatformKind {
     fn get_size_in_bytes(&self) -> i32;
     fn get_vector_length(&self) -> i32;
     fn get_type_char(&self) -> char;
+
+    /// Rust 增设：支持 `ValueKind::change_type` / `LIRKind::combine` 等需要复制
+    /// PlatformKind 的场景。各实现返回等值新 Box。
+    fn clone_box(&self) -> Box<dyn PlatformKind>;
 }

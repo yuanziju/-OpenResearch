@@ -8,6 +8,7 @@ description = "Rust 移植 jdk.graal.compiler.util.args（16 类，完整移植�
 [dependencies]
 rustci-collections = { path = "../rustci-collections" }
 rustci-vm-ci = { path = "../rustci-vm-ci" }
+lazy_static = "1"
 
 [lib]
 name = "rustci_compiler"

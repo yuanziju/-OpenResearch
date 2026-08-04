@@ -135,8 +135,11 @@ pub enum MandatoryStages {
     Enterprise,
 }
 
+/// A speculation log that records assumptions made during compilation.
+pub type SpeculationLog = Box<dyn std::any::Any>;
+
 /// 对应 `class GraphState`：管理图的编译阶段状态。
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct GraphState {
     /// 对应 `stageFlags`：已完成的阶段标志。
     pub stage_flags: HashSet<StageFlag>,
@@ -148,6 +151,8 @@ pub struct GraphState {
     pub future_required_stages: HashSet<StageFlag>,
     /// 对应 `disabledFrameStateVerification`：是否禁用了帧状态验证。
     pub disabled_frame_state_verification: bool,
+    /// Speculation log for recording assumptions.
+    pub speculation_log: Option<SpeculationLog>,
 }
 
 impl GraphState {
@@ -159,7 +164,18 @@ impl GraphState {
             frame_state_verification: FrameStateVerification::All,
             future_required_stages: HashSet::new(),
             disabled_frame_state_verification: false,
+            speculation_log: None,
         }
+    }
+
+    /// Returns the set of stage flags that have been applied.
+    pub fn get_stage_flags(&self) -> &HashSet<StageFlag> {
+        &self.stage_flags
+    }
+
+    /// Returns the speculation log, if any.
+    pub fn get_speculation_log(&self) -> Option<&SpeculationLog> {
+        self.speculation_log.as_ref()
     }
 
     /// 对应 `isBeforeStage(StageFlag)`：是否在指定阶段之前。
@@ -236,7 +252,19 @@ impl GraphState {
 
     /// 对应 `copy()`：复制图状态。
     pub fn copy(&self) -> Self {
-        self.clone()
+        self.clone_without_log()
+    }
+
+    /// Clones the graph state without the speculation log.
+    pub fn clone_without_log(&self) -> Self {
+        GraphState {
+            stage_flags: self.stage_flags.clone(),
+            guards_stage: self.guards_stage,
+            frame_state_verification: self.frame_state_verification,
+            future_required_stages: self.future_required_stages.clone(),
+            disabled_frame_state_verification: self.disabled_frame_state_verification,
+            speculation_log: None,
+        }
     }
 
     /// 对应 `getFutureRequiredStages()`：获取未来需要的阶段。
@@ -247,6 +275,12 @@ impl GraphState {
     /// 对应 `addFutureStageRequirement(StageFlag)`：添加未来阶段需求。
     pub fn add_future_stage_requirement(&mut self, stage: StageFlag) {
         self.future_required_stages.insert(stage);
+    }
+}
+
+impl Clone for GraphState {
+    fn clone(&self) -> Self {
+        self.clone_without_log()
     }
 }
 

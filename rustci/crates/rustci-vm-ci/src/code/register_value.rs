@@ -90,6 +90,13 @@ impl Value for RegisterValue {
         self
     }
 
+    fn clone_box(&self) -> Box<dyn Value> {
+        Box::new(RegisterValue {
+            kind: self.kind.clone_box(),
+            reg: self.reg,
+        })
+    }
+
     fn value_equals(&self, other: &dyn Value) -> bool {
         // super.equals（按 valueKind.equals）+ reg.equals。
         match other.as_any().downcast_ref::<RegisterValue>() {

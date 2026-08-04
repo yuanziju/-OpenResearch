@@ -98,6 +98,9 @@ pub trait Value: Debug + Display {
 
     /// Rust 增设：支持 `code::ValueUtil` 的 `instanceof` 下转。
     fn as_any(&self) -> &dyn Any;
+
+    /// Rust 增设：深拷贝 Value trait 对象。各实现返回等值新 Box。
+    fn clone_box(&self) -> Box<dyn Value>;
 }
 
 /// 对应 `Value` 内嵌 `private static final class IllegalValue extends AllocatableValue`。
@@ -133,6 +136,10 @@ impl Value for IllegalValue {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn clone_box(&self) -> Box<dyn Value> {
+        Box::new(IllegalValue::new())
     }
 
     // Java `IllegalValue.equals`：按类型判等（`other instanceof IllegalValue`）。

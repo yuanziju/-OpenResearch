@@ -134,6 +134,10 @@ impl JavaConstant for PrimitiveConstant {
             Some(o) => self.kind == o.kind && self.primitive == o.primitive,
         }
     }
+
+    fn clone_box(&self) -> Box<dyn JavaConstant> {
+        Box::new(*self)
+    }
 }
 
 impl Constant for PrimitiveConstant {

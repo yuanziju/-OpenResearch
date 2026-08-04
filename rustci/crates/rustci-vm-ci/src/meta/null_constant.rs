@@ -85,6 +85,10 @@ impl JavaConstant for NullConstant {
         panic!("IllegalArgumentException");
     }
 
+    fn clone_box(&self) -> Box<dyn JavaConstant> {
+        Box::new(NullConstant)
+    }
+
     fn constant_equals(&self, other: &dyn JavaConstant) -> bool {
         // 对应 `NullConstant.equals(Object o) { return o instanceof NullConstant; }`
         Constant::as_any(other)

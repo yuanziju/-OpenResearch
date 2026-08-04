@@ -133,6 +133,14 @@ impl Value for StackSlot {
         self
     }
 
+    fn clone_box(&self) -> Box<dyn Value> {
+        Box::new(StackSlot {
+            kind: self.kind.clone_box(),
+            offset: self.offset,
+            add_frame_size: self.add_frame_size,
+        })
+    }
+
     fn value_equals(&self, other: &dyn Value) -> bool {
         match other.as_any().downcast_ref::<StackSlot>() {
             None => false,

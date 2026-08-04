@@ -105,6 +105,10 @@ impl PlatformKind for IllegalKind {
     fn get_type_char(&self) -> char {
         '-'
     }
+
+    fn clone_box(&self) -> Box<dyn PlatformKind> {
+        Box::new(*self)
+    }
 }
 
 /// 对应 `ValueKind` 内嵌 `private static class IllegalValueKind extends ValueKind<IllegalValueKind>`。

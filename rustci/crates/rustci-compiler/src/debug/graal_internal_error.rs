@@ -1,0 +1,80 @@
+/*
+ * Copyright (c) 2024, 2026, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
+
+// SPDX-License-Identifier: GPL-2.0-with-classpath-exception
+//
+// Rust mirror of `jdk.graal.compiler.debug.GraalInternalError`.
+
+use crate::debug::graal_error::GraalError;
+
+/// Mirrors `jdk.graal.compiler.debug.GraalInternalError`.
+/// Indicates an internal compiler error — a bug in the compiler itself.
+#[derive(Debug)]
+pub struct GraalInternalError {
+    inner: GraalError,
+}
+
+impl GraalInternalError {
+    /// Mirrors `GraalInternalError(String)`.
+    pub fn new(message: String) -> Self {
+        GraalInternalError {
+            inner: GraalError::new(message),
+        }
+    }
+
+    /// Mirrors `GraalInternalError(String, Throwable)`.
+    pub fn with_cause(message: String, cause: Box<dyn std::error::Error + Send + Sync>) -> Self {
+        GraalInternalError {
+            inner: GraalError::with_cause(message, cause),
+        }
+    }
+
+    /// Mirrors `GraalInternalError.shouldPrintStackTrace()`.
+    pub fn should_print_stack_trace(&self) -> bool {
+        self.inner.should_print_stack_trace()
+    }
+
+    /// Mirrors `GraalInternalError.getMessage()`.
+    pub fn message(&self) -> &str {
+        self.inner.message()
+    }
+
+    /// Mirrors `GraalInternalError.getCause()`.
+    pub fn cause(&self) -> Option<&(dyn std::error::Error + Send + Sync)> {
+        self.inner.cause()
+    }
+}
+
+impl std::fmt::Display for GraalInternalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Internal error: {}", self.inner)
+    }
+}
+
+impl std::error::Error for GraalInternalError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.inner.source()
+    }
+}

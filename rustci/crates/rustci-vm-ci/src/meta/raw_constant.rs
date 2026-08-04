@@ -92,6 +92,12 @@ impl JavaConstant for RawConstant {
         self.inner.as_double()
     }
 
+    fn clone_box(&self) -> Box<dyn JavaConstant> {
+        Box::new(RawConstant {
+            inner: self.inner.clone(),
+        })
+    }
+
     fn constant_equals(&self, other: &dyn JavaConstant) -> bool {
         // 对齐 `PrimitiveConstant.equals`（RawConstant 经 super 走 PrimitiveConstant.equals）。
         match Constant::as_any(other).downcast_ref::<PrimitiveConstant>() {
