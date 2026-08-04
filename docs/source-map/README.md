@@ -52,10 +52,10 @@
 |---|---|---|---|---|---|
 | 10 | jdk.graal.compiler.core | 3200 | 2800 | 已验收 | [jdk-graal-compiler-core.md](jdk-graal-compiler-core.md) |
 | 11 | jdk.graal.compiler.nodes | 12000 | 5200 | 已验收 | [jdk-graal-compiler-nodes.md](jdk-graal-compiler-nodes.md) |
-| 12 | jdk.graal.compiler.graph | — | — | 未开始 | [jdk-graal-compiler-graph.md](jdk-graal-compiler-graph.md) |
-| 13 | jdk.graal.compiler.lir | — | — | 未开始 | [jdk-graal-compiler-lir.md](jdk-graal-compiler-lir.md) |
-| 14 | jdk.graal.compiler.phases | — | — | 未开始 | [jdk-graal-compiler-phases.md](jdk-graal-compiler-phases.md) |
-| 15 | jdk.graal.compiler.debug | — | — | 未开始 | [jdk-graal-compiler-debug.md](jdk-graal-compiler-debug.md) |
+| 12 | jdk.graal.compiler.graph | 4500 | 3800 | 已验收 | [jdk-graal-compiler-graph.md](jdk-graal-compiler-graph.md) |
+| 13 | jdk.graal.compiler.lir | 3200 | 2500 | 已验收 | [jdk-graal-compiler-lir.md](jdk-graal-compiler-lir.md) |
+| 14 | jdk.graal.compiler.phases | 2800 | 2200 | 已验收 | [jdk-graal-compiler-phases.md](jdk-graal-compiler-phases.md) |
+| 15 | jdk.graal.compiler.debug | 3500 | 3100 | 已验收 | [jdk-graal-compiler-debug.md](jdk-graal-compiler-debug.md) |
 
 ### D. jdk.graal.compiler 后端与平台（/opt/graal/compiler/src/jdk.graal.compiler/）
 
